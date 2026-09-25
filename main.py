@@ -656,15 +656,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["tournament", "metaculus_cup", "test_questions"],
-        default="tournament",
-        help="What to forecast on (default: tournament)",
+        choices=["minibench", "tournament", "metaculus_cup", "test_questions"],
+        default="minibench",
+        help="What to forecast on (default: minibench)",
+    )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="Submit forecasts to Metaculus; omitted for a local dry run",
     )
     args = parser.parse_args()
-    run_mode: Literal["tournament", "metaculus_cup", "test_questions"] = args.mode
+    run_mode: Literal["minibench", "tournament", "metaculus_cup", "test_questions"] = args.mode
 
     check_environment(strict=True)
-    publish_to_metaculus = True
+    publish_to_metaculus = args.publish
     print_startup_banner(run_mode, will_publish=publish_to_metaculus)
 
     # Configure the bot. The `llms=` block below is commented out to use
@@ -695,6 +700,7 @@ if __name__ == "__main__":
     # piggyback on the forecasting_tools SDK constants and need updating
     # whenever those rotate seasons.
     TOURNAMENT_URLS = {
+        "minibench": "https://www.metaculus.com/tournament/minibench/",
         "tournament": "https://www.metaculus.com/tournament/summer-futureeval-2026/",
         "metaculus_cup": "https://www.metaculus.com/tournament/metaculus-cup-summer-2025/",
         "test_questions": "https://www.metaculus.com/tournament/bot-testing-area/",
@@ -704,7 +710,13 @@ if __name__ == "__main__":
     # exceptions, since return_exceptions=True) which then flows into the
     # summary printers below.
     client = MetaculusClient()
-    if run_mode == "tournament":
+    if run_mode == "minibench":
+        forecast_reports = asyncio.run(
+            template_bot.forecast_on_tournament(
+                client.CURRENT_MINIBENCH_ID, return_exceptions=True
+            )
+        )
+    elif run_mode == "tournament":
         seasonal_tournament_reports = asyncio.run(
             template_bot.forecast_on_tournament(
                 client.CURRENT_AI_COMPETITION_ID, return_exceptions=True
