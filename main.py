@@ -140,7 +140,14 @@ class SummerTemplateBot2026(ForecastBot):
                 f"""
                 You are an assistant to a superforecaster.
                 The superforecaster will give you a question they intend to forecast on.
-                To be a great assistant, you generate a concise but detailed rundown of the most relevant news, including if the question would resolve Yes or No based on current information.
+                Give a concise, dated rundown of evidence relevant to the exact resolution criteria.
+                Prefer the named resolution source and other primary sources. Include URLs and
+                publication dates for facts you verify. Distinguish an event that has already
+                happened from an announcement or plan. If you cannot verify a claim with a
+                source, label it unverified instead of inventing a citation or current value.
+                Identify the current observed value, a relevant historical base rate, and
+                the main ways the result could differ from the apparent trend when available.
+                Do not use the Metaculus community forecast as evidence for the outcome.
                 You do not produce forecasts yourself.
 
                 Question:
@@ -197,7 +204,7 @@ class SummerTemplateBot2026(ForecastBot):
             {question.background_info}
 
 
-            This question's outcome will be determined by the specific criteria below. These criteria have not yet been satisfied:
+            This question's outcome will be determined by the specific criteria below:
             {question.resolution_criteria}
 
             {question.fine_print}
@@ -205,6 +212,10 @@ class SummerTemplateBot2026(ForecastBot):
 
             Your research assistant says:
             {research}
+
+            Check the cited evidence against the resolution criteria. Treat unsupported
+            research claims as uncertain. Use a relevant base rate, the current observed
+            state, and the remaining time; do not merely repeat the community forecast.
 
             Today is {datetime.now().strftime("%Y-%m-%d")}.
 
@@ -268,6 +279,10 @@ class SummerTemplateBot2026(ForecastBot):
 
             Your research assistant says:
             {research}
+
+            Check the cited evidence against the resolution criteria. Treat unsupported
+            research claims as uncertain. Use a relevant base rate, the current observed
+            state, and the remaining time; do not merely repeat the community forecast.
 
             Today is {datetime.now().strftime("%Y-%m-%d")}.
 
@@ -345,6 +360,10 @@ class SummerTemplateBot2026(ForecastBot):
 
             Your research assistant says:
             {research}
+
+            Check the cited evidence against the resolution criteria and units. Treat
+            unsupported research claims as uncertain. Anchor the distribution to a
+            relevant base rate and current observation, then allow for both tails.
 
             Today is {datetime.now().strftime("%Y-%m-%d")}.
 
@@ -437,6 +456,10 @@ class SummerTemplateBot2026(ForecastBot):
 
             Your research assistant says:
             {research}
+
+            Check the cited evidence against the resolution criteria and date bounds.
+            Treat unsupported research claims as uncertain. Anchor the distribution to
+            relevant past timelines and the current observed stage of progress.
 
             Today is {datetime.now().strftime("%Y-%m-%d")}.
 
@@ -701,7 +724,7 @@ if __name__ == "__main__":
     # whenever those rotate seasons.
     TOURNAMENT_URLS = {
         "minibench": "https://www.metaculus.com/tournament/minibench/",
-        "tournament": "https://www.metaculus.com/tournament/summer-futureeval-2026/",
+        "tournament": "https://www.metaculus.com/tournament/fall-futureeval-2026/",
         "metaculus_cup": "https://www.metaculus.com/tournament/metaculus-cup-summer-2025/",
         "test_questions": "https://www.metaculus.com/tournament/bot-testing-area/",
     }
@@ -713,18 +736,18 @@ if __name__ == "__main__":
     if run_mode == "minibench":
         forecast_reports = asyncio.run(
             template_bot.forecast_on_tournament(
-                client.CURRENT_MINIBENCH_ID, return_exceptions=True
+                "minibench", return_exceptions=True
             )
         )
     elif run_mode == "tournament":
         seasonal_tournament_reports = asyncio.run(
             template_bot.forecast_on_tournament(
-                client.CURRENT_AI_COMPETITION_ID, return_exceptions=True
+                "fall-futureeval-2026", return_exceptions=True
             )
         )
         minibench_reports = asyncio.run(
             template_bot.forecast_on_tournament(
-                client.CURRENT_MINIBENCH_ID, return_exceptions=True
+                "minibench", return_exceptions=True
             )
         )
         forecast_reports = seasonal_tournament_reports + minibench_reports
