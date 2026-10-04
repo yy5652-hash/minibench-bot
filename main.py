@@ -740,16 +740,18 @@ if __name__ == "__main__":
             )
         )
     elif run_mode == "tournament":
-        seasonal_tournament_reports = asyncio.run(
-            template_bot.forecast_on_tournament(
-                "fall-futureeval-2026", return_exceptions=True
+        # The shared bot's semaphores and clients must stay on one event loop.
+        with asyncio.Runner() as runner:
+            seasonal_tournament_reports = runner.run(
+                template_bot.forecast_on_tournament(
+                    "fall-futureeval-2026", return_exceptions=True
+                )
             )
-        )
-        minibench_reports = asyncio.run(
-            template_bot.forecast_on_tournament(
-                "minibench", return_exceptions=True
+            minibench_reports = runner.run(
+                template_bot.forecast_on_tournament(
+                    "minibench", return_exceptions=True
+                )
             )
-        )
         forecast_reports = seasonal_tournament_reports + minibench_reports
     elif run_mode == "metaculus_cup":
         # The Metaculus Cup may be uninitialized near the start of a season
