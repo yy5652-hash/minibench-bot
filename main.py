@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Literal
 
 import dotenv
 
@@ -40,6 +39,8 @@ from forecasting_tools import (
     clean_indents,
     structure_output,
 )
+
+from bot_runtime import run, safe_model_names
 
 dotenv.load_dotenv()
 logger = logging.getLogger(__name__)
@@ -129,6 +130,9 @@ class SummerTemplateBot2026(ForecastBot):
     _concurrency_limiter = asyncio.Semaphore(_max_concurrent_questions)
     _structure_output_validation_samples = 2
 
+    def make_llm_dict(self):
+        return safe_model_names(self)
+
     ##################################### RESEARCH #####################################
 
     async def run_research(self, question: MetaculusQuestion) -> str:
@@ -139,6 +143,7 @@ class SummerTemplateBot2026(ForecastBot):
             prompt = clean_indents(
                 f"""
                 You are an assistant to a superforecaster.
+                Today's date is {datetime.now(timezone.utc).date().isoformat()} (UTC).
                 The superforecaster will give you a question they intend to forecast on.
                 Give a concise, dated rundown of evidence relevant to the exact resolution criteria.
                 Prefer the named resolution source and other primary sources. Include URLs and
@@ -688,95 +693,15 @@ if __name__ == "__main__":
         action="store_true",
         help="Submit forecasts to Metaculus; omitted for a local dry run",
     )
+    parser.add_argument("--inventory-only", action="store_true", help="List open questions without model calls or submissions")
+    parser.add_argument("--limit", type=int, default=0, help="Maximum new questions to forecast; 0 means all")
+    parser.add_argument("--predictions", type=int, default=5, help="Independent forecasts per question")
+    parser.add_argument("--output-dir", default="forecast-output", help="Save question inventory and each forecast")
     args = parser.parse_args()
-    run_mode: Literal["minibench", "tournament", "metaculus_cup", "test_questions"] = args.mode
-
+    if args.limit < 0 or args.predictions < 1:
+        parser.error("--limit must be nonnegative and --predictions must be positive")
+    if args.inventory_only and args.publish:
+        parser.error("--inventory-only cannot be combined with --publish")
     check_environment(strict=True)
-    publish_to_metaculus = args.publish
-    print_startup_banner(run_mode, will_publish=publish_to_metaculus)
-
-    # Configure the bot. The `llms=` block below is commented out to use
-    # whichever default models forecasting-tools picks based on your env vars;
-    # uncomment and edit to pin specific models.
-    template_bot = SummerTemplateBot2026(
-        research_reports_per_question=1,
-        predictions_per_research_report=5,
-        use_research_summary_to_forecast=False,
-        publish_reports_to_metaculus=publish_to_metaculus,
-        folder_to_save_reports_to=None,
-        skip_previously_forecasted_questions=True,
-        extra_metadata_in_explanation=True,
-        # llms={
-        #     "default": GeneralLlm(
-        #         model="openrouter/openai/gpt-4o",
-        #         temperature=0.3,
-        #         timeout=40,
-        #         allowed_tries=2,
-        #     ),
-        #     "summarizer": "openai/gpt-4o-mini",
-        #     "researcher": "asknews/news-summaries",
-        #     "parser": "openai/gpt-4o-mini",
-        # },
-    )
-
-    # Per-mode tournament URL shown in the summary banner footer. These
-    # piggyback on the forecasting_tools SDK constants and need updating
-    # whenever those rotate seasons.
-    TOURNAMENT_URLS = {
-        "minibench": "https://www.metaculus.com/tournament/minibench/",
-        "tournament": "https://www.metaculus.com/tournament/fall-futureeval-2026/",
-        "metaculus_cup": "https://www.metaculus.com/tournament/metaculus-cup-summer-2025/",
-        "test_questions": "https://www.metaculus.com/tournament/bot-testing-area/",
-    }
-
-    # Dispatch on mode. Each branch produces a list of ForecastReport (or
-    # exceptions, since return_exceptions=True) which then flows into the
-    # summary printers below.
-    client = MetaculusClient()
-    if run_mode == "minibench":
-        forecast_reports = asyncio.run(
-            template_bot.forecast_on_tournament(
-                "minibench", return_exceptions=True
-            )
-        )
-    elif run_mode == "tournament":
-        # The shared bot's semaphores and clients must stay on one event loop.
-        with asyncio.Runner() as runner:
-            seasonal_tournament_reports = runner.run(
-                template_bot.forecast_on_tournament(
-                    "fall-futureeval-2026", return_exceptions=True
-                )
-            )
-            minibench_reports = runner.run(
-                template_bot.forecast_on_tournament(
-                    "minibench", return_exceptions=True
-                )
-            )
-        forecast_reports = seasonal_tournament_reports + minibench_reports
-    elif run_mode == "metaculus_cup":
-        # The Metaculus Cup may be uninitialized near the start of a season
-        # (Jan/May/Sep). AXC_2025_TOURNAMENT_ID = 32564 and
-        # AI_2027_TOURNAMENT_ID = "ai-2027" are also valid targets here.
-        template_bot.skip_previously_forecasted_questions = False
-        forecast_reports = asyncio.run(
-            template_bot.forecast_on_tournament(
-                client.CURRENT_METACULUS_CUP_ID, return_exceptions=True
-            )
-        )
-    elif run_mode == "test_questions":
-        # The bot-testing-area tournament contains all question types and is
-        # the recommended target for smoke-testing your bot.
-        # https://www.metaculus.com/tournament/bot-testing-area/
-        template_bot.skip_previously_forecasted_questions = False
-        forecast_reports = asyncio.run(
-            template_bot.forecast_on_tournament(
-                "bot-testing-area", return_exceptions=True
-            )
-        )
-
-    template_bot.log_report_summary(forecast_reports)
-    print_run_summary_banner(
-        forecast_reports,
-        will_publish=publish_to_metaculus,
-        tournament_url=TOURNAMENT_URLS.get(run_mode),
-    )
+    print_startup_banner(args.mode, will_publish=args.publish)
+    raise SystemExit(asyncio.run(run(SummerTemplateBot2026, args)))

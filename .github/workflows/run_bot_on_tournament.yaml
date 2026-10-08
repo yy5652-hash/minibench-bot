@@ -37,13 +37,16 @@ jobs:
       #     path: .venv
       #     key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
       - name: Install dependencies
-        run: poetry install --no-interaction --no-root
+        run: poetry install --only main --no-interaction --no-root
       - name: Run bot
         run: |
           poetry run python main.py --mode tournament --publish
         # this reads the environment variables from the github repository.
         # Store under Settings --> Secrets and variables --> Actions
         env:
+          FORECAST_MODEL: ${{ vars.FORECAST_MODEL }}
+          RESEARCH_MODEL: ${{ vars.RESEARCH_MODEL }}
+          PARSER_MODEL: ${{ vars.PARSER_MODEL }}
           METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }} # replace this with the name of the variable under which you stored your own Metaculus token
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
@@ -51,4 +54,13 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ASKNEWS_CLIENT_ID: ${{ secrets.ASKNEWS_CLIENT_ID }}
+          ASKNEWS_API_KEY: ${{ secrets.ASKNEWS_API_KEY }}
           ASKNEWS_SECRET: ${{ secrets.ASKNEWS_SECRET }}
+      - name: Save inventory and forecasts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forecasts-${{ github.run_id }}
+          path: forecast-output/
+          if-no-files-found: ignore
+          retention-days: 14
