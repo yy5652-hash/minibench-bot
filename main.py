@@ -718,6 +718,12 @@ if __name__ == "__main__":
         #     "parser": "openai/gpt-4o-mini",
         # },
     )
+    # With only METACULUS_TOKEN set, the default researcher is
+    # metaculus/gpt-4o-search-preview, which the Metaculus proxy refuses for
+    # this bot account. Research with the default model until a search
+    # provider key is added.
+    if template_bot.get_llm("researcher", "llm").model == "metaculus/gpt-4o-search-preview":
+        template_bot.set_llm(template_bot.get_llm("default", "llm"), "researcher")
 
     # Per-mode tournament URL shown in the summary banner footer. These
     # piggyback on the forecasting_tools SDK constants and need updating
