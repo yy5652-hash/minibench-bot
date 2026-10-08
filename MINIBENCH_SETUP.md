@@ -23,6 +23,26 @@ Metaculus proxy models. Do not choose a model until its access is confirmed.
 The official template links the current participation/credits form:
 https://github.com/Metaculus/metac-bot-template#readme
 
+### Existing local model service
+
+For local execution, `.env` can select the existing authenticated Responses
+service without copying provider credentials:
+
+```dotenv
+LOCAL_MODEL_BASE_URL=http://127.0.0.1:10100/v1
+FORECAST_MODEL=gpt-6.1-sol
+RESEARCH_MODEL=gpt-6.1-sol
+PARSER_MODEL=gpt-6.1-sol
+```
+
+The local adapter requires a loopback address, forces an actual web search for
+research, preserves source URLs, and rejects incomplete or empty responses.
+It bypasses the locked LiteLLM transport's missing optional FastAPI dependency.
+Token usage is saved separately; dollar cost is unknown rather than reported as
+zero. The local route still requires the bot's Metaculus token. GitHub-hosted
+Actions cannot use this loopback URL; cloud execution requires its own approved
+provider credentials. Keep the local gateway private.
+
 ## Inspect and preview
 
 `Diagnose and Preview Bot` defaults to an inventory-only run: it reads current

@@ -143,6 +143,7 @@ class SummerTemplateBot2026(ForecastBot):
             prompt = clean_indents(
                 f"""
                 You are an assistant to a superforecaster.
+                Today's date is {datetime.now(timezone.utc).date().isoformat()} (UTC).
                 The superforecaster will give you a question they intend to forecast on.
                 Give a concise, dated rundown of evidence relevant to the exact resolution criteria.
                 Prefer the named resolution source and other primary sources. Include URLs and

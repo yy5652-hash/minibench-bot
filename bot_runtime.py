@@ -9,6 +9,7 @@ from pathlib import Path
 from forecasting_tools import ApiFilter, ForecastReport, GeneralLlm, MetaculusClient
 
 from bot_helpers import _is_real_env, print_run_summary_banner
+from local_responses import LocalResponsesLlm
 
 
 def model_config() -> dict:
@@ -25,11 +26,15 @@ def model_config() -> dict:
         raise ValueError("A current-evidence research provider is required.")
     parser = os.getenv("PARSER_MODEL", "").strip() or forecast
 
-    def llm(name: str) -> GeneralLlm:
+    local_base = os.getenv("LOCAL_MODEL_BASE_URL", "").strip()
+
+    def llm(name: str, *, search: bool = False) -> GeneralLlm:
+        if local_base:
+            return LocalResponsesLlm(name, local_base, search=search)
         # Do not send temperature to reasoning/search models that reject it.
         return GeneralLlm(model=name, timeout=180, allowed_tries=2)
 
-    research = researcher if researcher.startswith(("asknews/", "smart-searcher/")) else llm(researcher)
+    research = researcher if researcher.startswith(("asknews/", "smart-searcher/")) else llm(researcher, search=True)
     if researcher.startswith("asknews/") and not (
         _is_real_env("ASKNEWS_API_KEY")
         or (_is_real_env("ASKNEWS_CLIENT_ID") and _is_real_env("ASKNEWS_SECRET"))
@@ -126,6 +131,8 @@ async def run(bot_class, args) -> int:
         report = await bot.forecast_question(question, return_exceptions=True)
         reports.append(report)
         if isinstance(report, ForecastReport):
+            if os.getenv("LOCAL_MODEL_BASE_URL"):
+                report.price_estimate = None
             ForecastReport.save_object_list_to_file_path(
                 [report], str(output / f"forecast-{question.id_of_question}.json"))
         else:
@@ -136,4 +143,9 @@ async def run(bot_class, args) -> int:
                 print("Provider access/credit failure: stopping this batch.")
                 break
     print_run_summary_banner(reports, args.publish)
+    usage = {role: llm.usage_summary() for role, llm in bot._llms.items()
+             if isinstance(llm, LocalResponsesLlm)}
+    if usage:
+        (output / "model-usage.json").write_text(json.dumps(usage, indent=2), encoding="utf-8")
+        print("Local model usage saved; dollar cost is unavailable, not zero.")
     return 1 if any(isinstance(r, BaseException) for r in reports) else 0
