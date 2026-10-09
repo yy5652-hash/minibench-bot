@@ -791,8 +791,9 @@ def summarize(results: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
     jnt = all_fam[all_fam["mode"] == "joint"]
 
     def agg(df):
+        # Rates are over the families that were answered; parse failures are reported in their own column.
         return df.groupby("model").agg(
-            arb_free=("arbitrage_free", "mean"),
+            arb_free=("arbitrage_free", lambda s: s[df.loc[s.index, "parsed"]].mean()),
             mean_arb_cents=("arbitrage", lambda s: 100 * s.mean()),
             parse_fail=("parsed", lambda s: int((~s).sum())),
         )
