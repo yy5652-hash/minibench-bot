@@ -171,3 +171,7 @@ cython_debug/
 
 # MacOS
 .DS_Store
+
+### Local runs (run_local.py) ###
+logs/
+.run_local.lock

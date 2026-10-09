@@ -6,8 +6,6 @@ on:
       days:
         description: "How many days back to look for resolved questions"
         default: "30"
-  schedule:
-    - cron: "0 6 * * 1" # weekly, Monday morning
 
 # Add concurrency group to prevent parallel runs
 concurrency:
@@ -16,11 +14,9 @@ concurrency:
 
 # Scores how the bot's resolved forecasts turned out. Read-only: it makes no
 # forecasts, spends nothing on LLMs, and publishes nothing.
-# The weekly run is off by default: set the repository variable REVIEW_BOT_ENABLED to
-# true to turn it on. Running it by hand always works.
+# Manual-only: reviews run on the owner's computer (see LOCAL_RUN.md).
 jobs:
   review_job:
-    if: vars.REVIEW_BOT_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository

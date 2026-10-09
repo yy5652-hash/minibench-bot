@@ -1,9 +1,9 @@
 name: Forecast on FutureEval and MiniBench
 
+# Forecasting now runs on the owner's computer via `run_local.py`
+# (see LOCAL_RUN.md). This workflow is manual-only, kept as a fallback.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "7,27,47 * * * *" # every 20 min, offset off the hour. Make sure to skip already-forecasted questions!
 
 # Add concurrency group to prevent parallel runs
 concurrency:
