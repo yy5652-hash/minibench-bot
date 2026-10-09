@@ -630,6 +630,44 @@ def score_families(prob_by_qid: dict) -> pd.DataFrame:
 RESULTS: dict[str, dict] = globals().get("RESULTS") or {}
 SKIPPED: dict[str, str] = globals().get("SKIPPED") or {}  # model name -> why it could not be evaluated
 
+CACHE_NAME = "dbb_results.json"
+
+
+def save_cache(path: str = f"{OUT_DIR}/{CACHE_NAME}") -> None:
+    """Write RESULTS/SKIPPED to JSON so a later session (or a reader) can reuse them without re-spending quota."""
+    payload = {
+        "results": {
+            m: dict(model=r["model"], score=r["score"], api_errors=r.get("api_errors", 0),
+                    families=r["families"].to_dict("records"), raw_isolated=r["raw_isolated"])
+            for m, r in RESULTS.items()
+        },
+        "skipped": SKIPPED,
+    }
+    with open(path, "w") as fh:
+        json.dump(payload, fh)
+
+
+def load_cache() -> int:
+    """Load cached results from an attached input (or the working dir). Returns how many models were loaded."""
+    import glob
+
+    paths = glob.glob(f"/kaggle/input/**/{CACHE_NAME}", recursive=True) + glob.glob(f"{OUT_DIR}/{CACHE_NAME}")
+    n = 0
+    for path in paths:
+        with open(path) as fh:
+            payload = json.load(fh)
+        for m, r in payload.get("results", {}).items():
+            if m not in RESULTS:
+                RESULTS[m] = dict(model=r["model"], score=r["score"], api_errors=r.get("api_errors", 0),
+                                  families=pd.DataFrame(r["families"]), raw_isolated=r["raw_isolated"])
+                n += 1
+        for m, why in payload.get("skipped", {}).items():
+            SKIPPED.setdefault(m, why)
+    return n
+
+
+print(f"loaded {load_cache()} cached model result(s)")
+
 
 def run_suite(llm) -> dict:
     name = getattr(llm, "name", str(llm))
@@ -708,14 +746,38 @@ main_run
 # %%
 INTERACTIVE = os.environ.get("KAGGLE_KERNEL_RUN_TYPE", "").lower() != "batch"
 print("Available models:", sorted(kbench.llms))
-ANALYSIS_MODELS = sorted(kbench.llms) if INTERACTIVE else []  # trim this list if you hit quota limits
+
+# Kaggle's model proxy has a daily quota (about $10) and reserves each call's worst-case cost up front, so the order
+# matters: cheap models from as many providers as possible first, the most expensive last. Models that are not on
+# the roster are skipped; models already in RESULTS (this session or the cache) are not re-run.
+PRIORITY = [
+    "google/gemini-2.5-flash", "openai/gpt-5.4-mini-2026-03-17", "anthropic/claude-haiku-5-5",
+    "xai/grok-4.20-0309-non-reasoning", "deepseek-ai/deepseek-r1-0528", "qwen/qwen3-235b-a22b-instruct-2507",
+    "openai/gpt-oss-120b", "google/gemma-4-31b", "zai/glm-5", "google/gemini-3.5-flash",
+    "openai/gpt-5.4-nano-2026-03-17", "openai/gpt-oss-20b", "google/gemma-4-26b-a4b", "qwen/qwen3-next-80b-a3b-instruct",
+    "qwen/qwen3-next-80b-a3b-thinking", "qwen/qwen3-coder-480b-a35b-instruct", "google/gemini-3.5-flash-lite",
+    "google/gemini-3.6-flash", "google/gemini-3.8-flash", "google/gemini-3-flash-preview",
+    "google/gemini-3.1-flash-lite-preview", "xai/grok-4.20-0309-reasoning", "xai/grok-4.6", "xai/grok-4.5-0708",
+    "anthropic/claude-haiku-4-5@20251001", "anthropic/claude-sonnet-5-5@default", "anthropic/claude-sonnet-5@default",
+    "anthropic/claude-sonnet-4-6@default", "openai/gpt-5.5-2026-04-23", "openai/gpt-5.6-luna", "openai/gpt-5.6-sol",
+    "openai/gpt-5.6-terra", "openai/gpt-6-luna", "openai/gpt-6-sol", "openai/gpt-6-astra", "openai/gpt-6.1-sol",
+    "google/gemini-2.5-pro", "google/gemini-3.1-pro-preview", "anthropic/claude-opus-4-5@20251101",
+    "anthropic/claude-opus-4-6@default", "anthropic/claude-opus-4-7@default", "anthropic/claude-opus-4-8@default",
+    "anthropic/claude-opus-5@default", "anthropic/claude-opus-5-5@default",
+]
+ordered = [m for m in PRIORITY if m in kbench.llms] + sorted(set(kbench.llms) - set(PRIORITY))
+ANALYSIS_MODELS = ordered if INTERACTIVE else []
 
 for model_name in ANALYSIS_MODELS:
+    if model_name in RESULTS:
+        print(f"{model_name:45s} {RESULTS[model_name]['score']:5.1f}%  (cached)")
+        continue
     try:
         r = run_suite(kbench.llms[model_name])
         print(f"{model_name:45s} {r['score']:5.1f}%")
     except Exception as e:  # keep going if one model is unavailable
         print(f"{model_name:45s} FAILED: {e!r}"[:400])
+    save_cache()
 
 if SKIPPED:
     print(f"\n{len(SKIPPED)} model(s) could not be evaluated from this account:")

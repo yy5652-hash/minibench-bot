@@ -42,7 +42,7 @@ def main():
     source = SRC.read_text()
     setup, run_part = source.split("# ==== RUN ====")
     run_part = run_part.split("main_run = dutch_book_bench.run(kbench.llm)\nmain_run")[1]
-    run_part = run_part.replace("sorted(kbench.llms)", "list(MOCKS)").replace("kbench.llms[model_name]", "MOCKS[model_name]")
+    run_part = run_part.replace("sorted(kbench.llms)", "list(MOCKS)").replace("kbench.llms[model_name]", "MOCKS[model_name]").replace("m in kbench.llms]", "m in MOCKS]").replace("set(kbench.llms)", "set(MOCKS)")
 
     os.chdir(tempfile.mkdtemp())
     ns = {"__name__": "__dbb__", "display": print}
