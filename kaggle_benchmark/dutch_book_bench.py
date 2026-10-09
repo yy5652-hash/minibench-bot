@@ -27,7 +27,8 @@
 #   truth vectors). A coherent forecaster has 0.
 #
 # **Leaderboard score**: the **arbitrage-free rate**, the percentage of families (asked in isolation, the way bots
-# work) where a bookie can guarantee at most 5¢. Higher is better.
+# work) where a bookie can guarantee at most 5¢. Higher is better. A model that fails to answer 10% or more of the
+# families (API errors or no parseable number) is not scored at all, so a dropped call never counts as incoherence.
 
 # %%
 import os
@@ -38,7 +39,9 @@ import datetime
 import itertools
 import json
 import math
+import random
 import re
+import time
 from fractions import Fraction
 
 import numpy as np
@@ -48,8 +51,10 @@ import kaggle_benchmarks as kbench
 
 TODAY = datetime.date.today().isoformat()
 ARB_TOL = 0.05  # dollars of guaranteed bookie profit per family still counted as "arbitrage-free"
-N_JOBS = 8
+N_JOBS = 4
 TIMEOUT_S = 600
+MAX_API_ATTEMPTS = 6  # per call; rate limits are retried with exponential backoff
+MIN_COVERAGE = 0.9  # a model must answer >= 90% of families or the task fails instead of scoring
 OUT_DIR = "/kaggle/working" if os.path.isdir("/kaggle/working") else "."
 
 # %% [markdown]
@@ -549,31 +554,47 @@ print(isolated_prompt("neg_apple_msft.1"))
 # `ask_joint` shows the model a whole family at once.
 
 # %%
+def _ask(llm, message: str) -> str:
+    """llm.prompt with retries. The Kaggle proxy rate-limits bigger models under concurrency, and a dropped call
+    must not be mistaken for an incoherent (or unparseable) answer."""
+    delay = 2.0
+    for attempt in range(1, MAX_API_ATTEMPTS + 1):
+        try:
+            return str(llm.prompt(message, temperature=0))
+        except Exception as e:  # noqa: BLE001 - we re-raise after the last attempt
+            if attempt == MAX_API_ATTEMPTS:
+                raise
+            time.sleep(delay + random.random())
+            delay = min(delay * 2, 40)
+
+
 @kbench.task(name="dbb_ask_isolated", store_task=False)
 def ask_isolated(llm, qid: str) -> dict:
-    reply = llm.prompt(isolated_prompt(qid), temperature=0)
-    return dict(qid=qid, p=parse_probability(reply), raw=str(reply)[-600:])
+    reply = _ask(llm, isolated_prompt(qid))
+    return dict(qid=qid, p=parse_probability(reply), raw=reply[-600:])
 
 
 @kbench.task(name="dbb_ask_joint", store_task=False)
 def ask_joint(llm, fid: str) -> dict:
     n = len(FAMILY_BY_ID[fid]["questions"])
-    reply = llm.prompt(joint_prompt(fid), temperature=0)
-    return dict(fid=fid, ps=parse_joint(reply, n), raw=str(reply)[-1200:])
+    reply = _ask(llm, joint_prompt(fid))
+    return dict(fid=fid, ps=parse_joint(reply, n), raw=reply[-1200:])
 
 
-def _collect(task, llm, df) -> list[dict]:
+def _collect(task, llm, df) -> tuple[list[dict], list[str]]:
     with kbench.client.enable_cache():
         runs = task.evaluate(
             llm=[llm],
             evaluation_data=df,
             n_jobs=N_JOBS,
             timeout=TIMEOUT_S,
-            max_attempts=2,
+            max_attempts=1,
             on_failure="continue",
             remove_run_files=True,
         )
-    return [r.result for r in runs.completed_runs if isinstance(r.result, dict)]
+    results = [r.result for r in runs.completed_runs if isinstance(r.result, dict)]
+    errors = [str(getattr(r, "error_message", "") or "unknown error")[:300] for r in runs.errored_runs]
+    return results, errors
 
 
 def score_families(prob_by_qid: dict) -> pd.DataFrame:
@@ -602,21 +623,31 @@ def run_suite(llm) -> dict:
     name = getattr(llm, "name", str(llm))
     if name in RESULTS:
         return RESULTS[name]
-    iso = _collect(ask_isolated, llm, QUESTIONS[["qid"]])
+    iso, iso_errors = _collect(ask_isolated, llm, QUESTIONS[["qid"]])
     iso_p = {r["qid"]: r["p"] for r in iso}
-    joint = _collect(ask_joint, llm, pd.DataFrame({"fid": [f["fid"] for f in FAMILIES]}))
+    joint, joint_errors = _collect(ask_joint, llm, pd.DataFrame({"fid": [f["fid"] for f in FAMILIES]}))
     joint_p = {}
     for r in joint:
         for q, p in zip(FAMILY_BY_ID[r["fid"]]["questions"], r["ps"]):
             joint_p[q["qid"]] = p
     isolated_df = score_families(iso_p).assign(mode="isolated")
     joint_df = score_families(joint_p).assign(mode="joint")
+    coverage = float(isolated_df.parsed.mean())
+    if coverage < MIN_COVERAGE:
+        unparsed = [r["raw"][-200:] for r in iso if r["p"] is None][:2]
+        raise RuntimeError(
+            f"{name}: only {coverage:.0%} of families answered ({len(iso_errors)} API errors, "
+            f"{sum(r['p'] is None for r in iso)} unparseable replies). Not scoring. "
+            f"Sample error: {iso_errors[:1]} Sample reply: {unparsed}"
+        )
     raw = {r["qid"]: r["raw"] for r in iso}
     RESULTS[name] = dict(
         model=name,
         families=pd.concat([isolated_df, joint_df], ignore_index=True),
         raw_isolated=raw,
-        score=100 * float(isolated_df.arbitrage_free.mean()),
+        api_errors=len(iso_errors) + len(joint_errors),
+        # Score over the families the model actually answered. Unparseable replies are reported separately.
+        score=100 * float(isolated_df[isolated_df.parsed].arbitrage_free.mean()),
     )
     return RESULTS[name]
 
@@ -635,7 +666,7 @@ def dutch_book_bench(llm) -> float:
     iso = fam[fam["mode"] == "isolated"]
     print(f"{res['model']}: arbitrage-free rate {res['score']:.1f}% "
           f"| mean guaranteed arbitrage {100 * iso.arbitrage.mean():.1f}¢/family "
-          f"| parse failures {int((~iso.parsed).sum())}")
+          f"| parse failures {int((~iso.parsed).sum())} | API errors {res['api_errors']}")
     return res["score"]
 
 
@@ -665,7 +696,7 @@ for model_name in ANALYSIS_MODELS:
         r = run_suite(kbench.llms[model_name])
         print(f"{model_name:45s} {r['score']:5.1f}%")
     except Exception as e:  # keep going if one model is unavailable
-        print(f"{model_name:45s} FAILED: {e!r}"[:200])
+        print(f"{model_name:45s} FAILED: {e!r}"[:400])
 
 # %%
 def summarize(results: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
