@@ -1,4 +1,9 @@
 # Simple Metaculus forecasting bot
+
+> **AMD Developer Hackathon: ACT III entry → [`shelfcast/`](shelfcast/)**: an LLM demand planner on AMD
+> Instinct MI300X that turns forecasts into restocking orders (track: Reinvent Commerce). The rest of
+> this README covers the Metaculus forecasting bot it grew out of.
+
 This repository contains a simple bot meant to get you started with creating your own bot for the AI Forecasting Tournament. Go to https://www.metaculus.com/futureeval/participate/ for more info and tournament rules (and then go to the  "Getting Started" section of our [resources](https://www.metaculus.com/notebooks/38928/ai-benchmark-resources/#want-to-join-the-ai-forecasting-benchmark) page).
 
 **Brand new to this?** You can get a working bot running in about 5 minutes without writing a single line of code — just fork this repo, paste two API keys into GitHub, and click "Run workflow". See **[Quick start](#quick-start--fork-and-use-github-actions)** below.

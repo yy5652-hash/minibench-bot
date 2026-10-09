@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShelfCast</title>
+<meta name="description" content="Calibrated demand forecasts that become restocking decisions, served by an open LLM on AMD Instinct MI300X.">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #14171c; --muted: #5d6673; --line: #e3e6ea;
+  --accent: #0e7c6b; --accent-soft: rgba(14,124,107,.18); --base: #7b8494; --base-soft: rgba(123,132,148,.22);
+  --on-accent: #ffffff; --actual: #c2410c; --good: #0e7c6b; --bad: #b42318; --chip: #eef1f4; --code: #f1f3f6;
+  --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --panel: #171b21; --ink: #e8ebef; --muted: #9aa3ae; --line: #2a3038;
+    --accent: #35c2a8; --accent-soft: rgba(53,194,168,.22); --base: #8c96a5; --base-soft: rgba(140,150,165,.25);
+    --on-accent: #06231e; --actual: #fb923c; --good: #35c2a8; --bad: #f97066; --chip: #222831; --code: #1d232b;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --panel: #171b21; --ink: #e8ebef; --muted: #9aa3ae; --line: #2a3038;
+  --accent: #35c2a8; --accent-soft: rgba(53,194,168,.22); --base: #8c96a5; --base-soft: rgba(140,150,165,.25);
+  --on-accent: #06231e; --actual: #fb923c; --good: #35c2a8; --bad: #f97066; --chip: #222831; --code: #1d232b; --shadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between;
+  padding: 18px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand h1 { margin: 0; font-size: 22px; letter-spacing: -.01em; }
+.brand p { margin: 0; color: var(--muted); }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { background: var(--chip); border-radius: 999px; padding: 3px 10px; font-size: 13px; color: var(--muted);
+  white-space: nowrap; }
+.chip b { color: var(--ink); font-weight: 600; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--base); }
+.dot.ok { background: var(--good); } .dot.down { background: var(--bad); }
+main { max-width: 1280px; margin: 0 auto; padding: 20px 24px 40px; display: grid; gap: 20px;
+  grid-template-columns: 340px minmax(0, 1fr); }
+.card { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); }
+.card h2 { margin: 0 0 12px; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.wide { grid-column: 1 / -1; }
+label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+select, textarea, input[type=range] { width: 100%; }
+select, textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; }
+textarea { min-height: 76px; resize: vertical; }
+.examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.examples button { font: inherit; font-size: 12px; border: 1px dashed var(--line); background: transparent; color: var(--muted);
+  border-radius: 999px; padding: 2px 9px; cursor: pointer; }
+.examples button:hover { color: var(--ink); border-color: var(--muted); }
+.row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+.row b { color: var(--ink); }
+button.primary { margin-top: 16px; width: 100%; font: inherit; font-weight: 600; color: var(--on-accent); background: var(--accent);
+  border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+button.primary:disabled { opacity: .6; cursor: progress; }
+.headline { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; margin-bottom: 4px; }
+.headline h3 { margin: 0; font-size: 19px; }
+.tag { font-size: 12px; border-radius: 6px; padding: 1px 7px; background: var(--accent-soft); color: var(--ink); }
+.tag.grey { background: var(--chip); color: var(--muted); }
+.chart-wrap { position: relative; height: 300px; margin: 8px 0 4px; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 10px; border-radius: 2px; margin-right: 6px;
+  vertical-align: -1px; background: var(--c); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0; }
+.tile { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .v { font-size: 24px; font-weight: 650; letter-spacing: -.01em; }
+.tile .s { font-size: 12px; color: var(--muted); }
+.tile.accent { border-color: var(--accent); background: var(--accent-soft); }
+.good { color: var(--good); } .bad { color: var(--bad); }
+.drivers { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.drivers li { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: start; }
+.drivers .eff { font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
+.drivers .ev { color: var(--muted); font-size: 13px; }
+.analysis { margin: 12px 0 0; }
+.meta { margin-top: 12px; font-size: 12px; color: var(--muted); }
+details { margin-top: 12px; }
+details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+pre { background: var(--code); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 12px; line-height: 1.45;
+  white-space: pre-wrap; word-break: break-word; }
+.banner { border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-bottom: 10px; background: var(--chip); }
+.banner.warn { border-left: 3px solid var(--actual); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; white-space: normal; }
+th { color: var(--muted); font-weight: 500; }
+tr.hl td { font-weight: 650; }
+.scroll { overflow-x: auto; }
+.cases { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 12px; }
+.case { text-align: left; font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+.case:hover { border-color: var(--accent); }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.tabs button { font: inherit; font-size: 13px; color: var(--muted); background: transparent; border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.tabs button.on { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
+.case .k { font-size: 12px; color: var(--muted); }
+.empty { color: var(--muted); font-size: 14px; }
+footer { max-width: 1280px; margin: 0 auto; padding: 0 24px 32px; color: var(--muted); font-size: 12px; }
+@media (max-width: 900px) {
+  header { padding: 14px 16px; }
+  main { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 16px; }
+  footer { padding: 0 16px 24px; }
+  .chart-wrap { height: 240px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>ShelfCast</h1>
+    <p>Calibrated demand forecasts that become restocking decisions</p>
+  </div>
+  <div class="chips" id="chips"><span class="chip">loading…</span></div>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="ctl-h">
+    <h2 id="ctl-h">Plan an order</h2>
+    <label for="sku">Product</label>
+    <select id="sku"></select>
+    <label for="week">Week to stock for</label>
+    <select id="week"></select>
+    <label for="notes">Planner notes (optional, read by the model)</label>
+    <textarea id="notes" placeholder="Anything the sales history cannot know…"></textarea>
+    <div class="examples" id="examples"></div>
+    <label for="margin">Margin per unit sold</label>
+    <input type="range" id="margin" min="0.05" max="0.8" step="0.05" value="0.35">
+    <div class="row"><span>Lost sale costs</span><b id="margin-v"></b></div>
+    <label for="overage">Cost of a leftover unit (markdown, waste, holding)</label>
+    <input type="range" id="overage" min="0.05" max="1" step="0.05" value="0.25">
+    <div class="row"><span>Leftover costs</span><b id="overage-v"></b></div>
+    <div class="row" style="margin-top:8px"><span>Order at demand quantile</span><b id="cr-v"></b></div>
+    <button class="primary" id="go">Forecast and decide</button>
+  </section>
+
+  <section class="card" aria-live="polite" aria-labelledby="res-h">
+    <h2 id="res-h">Forecast</h2>
+    <div id="result"><p class="empty">Pick a product and a week, then press “Forecast and decide”.</p></div>
+  </section>
+
+  <section class="card wide" aria-labelledby="bt-h">
+    <h2 id="bt-h">Backtest: does it pay off?</h2>
+    <div id="backtest"><p class="empty">No backtest results yet. Run <code>python -m shelfcast backtest</code>.</p></div>
+  </section>
+
+  <section class="card wide" aria-labelledby="amd-h">
+    <h2 id="amd-h">Inference on AMD</h2>
+    <div id="bench"><p class="empty">No benchmark yet. Run <code>python -m shelfcast bench</code> on the GPU host.</p></div>
+  </section>
+</main>
+<footer id="footer"></footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt = (x, d = 0) => (x === null || x === undefined || Number.isNaN(x)) ? "n/a"
+  : Number(x).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
+const pct = (x, d = 1) => (x === null || x === undefined) ? "n/a" : `${(100 * x).toFixed(d)}%`;
+const signed = (x, d = 1) => (x > 0 ? "+" : "") + Number(x).toFixed(d);
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  for (const k of kids) if (k !== null && k !== undefined) e.append(k);
+  return e;
+}
+
+const EXAMPLES = [
+  "A competitor opens a store across the street this week",
+  "Heatwave forecast: 38°C all week",
+  "Product is trending on TikTok",
+  "Store closed Monday for renovation",
+  "Supplier warns of a short delivery",
+];
+let SKUS = [], INFO = null, chart = null;
+
+async function getJSON(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+function updateEcon() {
+  const m = +$("margin").value, o = +$("overage").value;
+  $("margin-v").textContent = `${Math.round(m * 100)}% of price`;
+  $("overage-v").textContent = `${Math.round(o * 100)}% of unit cost`;
+  const cu = m, co = (1 - m) * o;
+  $("cr-v").textContent = `${Math.round(100 * cu / (cu + co))}th percentile`;
+}
+
+function fillWeeks(selectIndex) {
+  const sku = SKUS.find((s) => s.sku_id === $("sku").value);
+  const w = $("week");
+  w.replaceChildren(...sku.weeks.map((x) => el("option", { value: x.index, text: x.label })));
+  w.value = selectIndex ?? sku.default_index;
+}
+
+function renderChips() {
+  const c = $("chips");
+  const kids = [];
+  if (INFO.model) kids.push(el("span", { class: "chip" }, "Model ", el("b", { text: INFO.model.split("/").pop() })));
+  // Name the GPU only when the serving host reported it (results/gpu_info.txt from the benchmark).
+  const gpu = INFO.gpu_info ? (INFO.gpu_info.match(/MI\d{3}[A-Z]*/) || [null])[0] : null;
+  kids.push(el("span", { class: "chip" }, "Served by ", el("b", { text: "vLLM" }),
+    gpu ? " on " : null, gpu ? el("b", { text: `AMD Instinct ${gpu}` }) : null));
+  const down = INFO.mode === "live" && INFO.endpoint_ok === false;
+  const dot = el("span", { class: "dot " + (INFO.mode === "replay" ? "" : down ? "down" : "ok") });
+  const modeText = INFO.mode === "replay" ? "replay (cached answers)" : down ? "live: endpoint down" : "live";
+  kids.push(el("span", { class: "chip" }, dot, el("b", { text: modeText })));
+  kids.push(el("span", { class: "chip", text: `${INFO.dataset.n_series} SKUs · ${INFO.dataset.source}` }));
+  c.replaceChildren(...kids);
+  $("footer").textContent = `Data: ${INFO.dataset.description}`;
+}
+
+function drawChart(r) {
+  const weeks = r.chart.weeks, n = weeks.length, t = n - 1;
+  const L = r.levels, i10 = L.indexOf(0.1), i90 = L.indexOf(0.9), i50 = L.indexOf(0.5);
+  const b = r.baseline.quantiles, a = r.final_quantiles;
+  const at = (v) => weeks.map((_, i) => (i === t ? v : null));
+  const hist = r.chart.demand.concat([null]);
+  const ds = [
+    { type: "line", label: "Units sold", data: hist, borderColor: css("--ink"), backgroundColor: css("--ink"),
+      pointRadius: 2, borderWidth: 1.5, tension: .2, order: 3 },
+    { type: "bar", label: "Baseline 10–90%", data: at([b[i10], b[i90]]), backgroundColor: css("--base-soft"),
+      borderColor: css("--base"), borderWidth: 1, order: 2, maxBarThickness: 22, minBarLength: 2 },
+    { type: "bar", label: "ShelfCast 10–90%", data: at([a[i10], a[i90]]), backgroundColor: css("--accent-soft"),
+      borderColor: css("--accent"), borderWidth: 1.5, order: 2, maxBarThickness: 22, minBarLength: 2 },
+    { type: "line", label: "Baseline median", data: at(b[i50]), showLine: false, pointStyle: "line",
+      pointRadius: 12, pointBorderWidth: 3, borderColor: css("--base"), order: 1 },
+    { type: "line", label: "ShelfCast median", data: at(a[i50]), showLine: false, pointStyle: "line",
+      pointRadius: 12, pointBorderWidth: 3, borderColor: css("--accent"), order: 1 },
+  ];
+  if (r.decision.actual !== undefined) {
+    ds.push({ type: "line", label: "Actual", data: at(r.decision.actual), showLine: false, pointStyle: "triangle",
+      pointRadius: 7, backgroundColor: css("--actual"), borderColor: css("--actual"), order: 0 });
+  }
+  if (chart) chart.destroy();
+  const grid = css("--line"), tick = css("--muted");
+  chart = new Chart($("chart"), {
+    data: { labels: weeks.map((w, i) => (i === t ? `${w} ▶` : w)), datasets: ds },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (c) => {
+          const v = c.raw; if (v === null) return null;
+          return Array.isArray(v) ? `${c.dataset.label}: ${fmt(v[0])}–${fmt(v[1])}` : `${c.dataset.label}: ${fmt(v, 1)}`;
+        } } },
+      },
+      scales: {
+        x: { stacked: false, grid: { display: false }, ticks: { color: tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } },
+        y: { beginAtZero: true, grid: { color: grid }, ticks: { color: tick } },
+      },
+    },
+  });
+}
+
+function tile(k, v, s, cls = "") {
+  return el("div", { class: "tile " + cls }, el("div", { class: "k", text: k }), el("div", { class: "v", text: v }),
+    s ? el("div", { class: "s", text: s }) : null);
+}
+
+function renderResult(r) {
+  const box = $("result");
+  const sku = SKUS.find((s) => s.sku_id === r.sku_id);
+  const d = r.decision;
+  const kids = [];
+  if (!r.llm_ok) kids.push(el("div", { class: "banner warn",
+    text: `Showing the statistical baseline only: ${r.error || "model unavailable"}.` }));
+  const evs = (r.brief.match(/events: (.*)/) || [, ""])[1];
+  const head = el("div", { class: "headline" }, el("h3", { text: r.title }),
+    el("span", { class: "tag grey", text: `week of ${r.target_week}` }),
+    r.horizon > 1 ? el("span", { class: "tag grey", text: `${r.horizon} weeks ahead` }) : null,
+    ...(evs && evs !== "none" ? evs.split("; ").map((e) => el("span", { class: "tag", text: e })) : []));
+  kids.push(head, el("div", { class: "legend" },
+    el("span", { style: `--c:${css("--ink")}`, text: "Units sold" }),
+    el("span", { style: `--c:${css("--base")}`, text: "Statistical baseline" }),
+    el("span", { style: `--c:${css("--accent")}`, text: "ShelfCast" + (r.calibrated ? " (calibrated)" : "") }),
+    d.actual !== undefined ? el("span", { style: `--c:${css("--actual")}`, text: "Actual" }) : null));
+  kids.push(el("div", { class: "chart-wrap" }, el("canvas", { id: "chart", role: "img",
+    "aria-label": "Sales history and forecast ranges" })));
+
+  const oa = d.orders.agent, ob = d.orders.baseline;
+  const ea = d.expected_cost_under_agent.agent, eb = d.expected_cost_under_agent.baseline;
+  const tiles = [
+    tile("Order with ShelfCast", `${fmt(oa)} units`, `${Math.round(100 * d.critical_ratio)}th percentile of demand`, "accent"),
+    tile("Order with baseline", `${fmt(ob)} units`, `${signed(oa - ob, 0)} units difference`),
+    tile("Expected cost saved", `$${fmt(eb - ea, 2)}`, "per week, judged by the ShelfCast forecast"),
+  ];
+  if (d.actual !== undefined) {
+    const saved = d.realized_cost.baseline - d.realized_cost.agent;
+    const t = tile("What actually happened", `${fmt(d.actual)} sold`,
+      `cost $${fmt(d.realized_cost.agent, 2)} vs $${fmt(d.realized_cost.baseline, 2)} with baseline`);
+    t.querySelector(".v").classList.add(saved >= 0 ? "good" : "bad");
+    tiles.push(t);
+  }
+  kids.push(el("div", { class: "tiles" }, ...tiles));
+
+  if (r.adjustment) {
+    const adj = r.adjustment;
+    kids.push(el("div", { class: "row", style: "margin-bottom:8px" },
+      el("span", { text: "Adjustment to the baseline median" }),
+      el("b", { text: `×${adj.median_multiplier.toFixed(2)} · confidence ${adj.confidence}` })));
+    if (adj.drivers.length) {
+      kids.push(el("ul", { class: "drivers" }, ...adj.drivers.map((x) => el("li", {},
+        el("span", { class: "eff " + (x.effect_pct >= 0 ? "good" : "bad"), text: `${signed(x.effect_pct, 0)}%` }),
+        el("div", {}, el("div", { text: x.name }), el("div", { class: "ev", text: x.evidence }))))));
+    }
+    kids.push(el("p", { class: "analysis", text: adj.analysis }));
+  }
+  const u = r.usage || {};
+  const meta = [];
+  if (r.llm_ok) {
+    meta.push(`${r.n_valid}/${r.n_requested} samples parsed`, `multipliers ${r.sample_multipliers.join(", ")}`);
+    meta.push(u.cached ? "answer from cache" : `${fmt(u.latency_s, 2)}s on the GPU`,
+      `${fmt(u.prompt_tokens)} prompt + ${fmt(u.completion_tokens)} generated tokens`);
+  }
+  if (meta.length) kids.push(el("div", { class: "meta", text: meta.join(" · ") }));
+  kids.push(el("details", {}, el("summary", { text: "The brief the model read" }), el("pre", { text: r.brief })));
+  box.replaceChildren(...kids);
+  drawChart(r);
+}
+
+async function runForecast() {
+  const btn = $("go");
+  btn.disabled = true; btn.textContent = "Thinking on the GPU…";
+  try {
+    const r = await getJSON("/api/forecast", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sku_id: $("sku").value, target_index: +$("week").value,
+        notes: $("notes").value || null, margin_pct: +$("margin").value, overage_pct: +$("overage").value }),
+    });
+    renderResult(r);
+  } catch (e) {
+    $("result").replaceChildren(el("div", { class: "banner warn", text: `Request failed: ${e.message}` }));
+  } finally {
+    btn.disabled = false; btn.textContent = "Forecast and decide";
+  }
+}
+
+const NAMES = { snaive: "Seasonal naive", baseline: "Statistical baseline", baseline_cal: "Baseline + calibration",
+  rule: "Uplift rule, no LLM", rule_cal: "Uplift rule + calibration", agent: "ShelfCast (raw)",
+  agent_cal: "ShelfCast + calibration" };
+
+function methodsTable(block) {
+  const rows = Object.keys(NAMES).filter((m) => block[m] && block[m].scaled_pinball !== undefined).map((m) => {
+    const s = block[m];
+    return el("tr", { class: m === "agent_cal" ? "hl" : "" }, el("td", { text: NAMES[m] }),
+      el("td", { text: s.scaled_pinball.toFixed(4) }), el("td", { text: pct(s.wape_median) }),
+      el("td", { text: pct(s.coverage_90) }), el("td", { text: `$${fmt(s.total_cost)}` }),
+      el("td", { text: pct(s.fill_rate) }));
+  });
+  return el("div", { class: "scroll" }, el("table", {},
+    el("thead", {}, el("tr", {}, ...["Method", "Scaled pinball ↓", "WAPE ↓", "90% coverage", "Inventory cost ↓", "Fill rate"]
+      .map((h) => el("th", { text: h })))), el("tbody", {}, ...rows)));
+}
+
+let BACKTESTS = [];
+function renderBacktests(res) {
+  if (!res.available) return;
+  BACKTESTS = res.runs;
+  renderBacktest(0);
+}
+
+function renderBacktest(k) {
+  const bt = BACKTESTS[k];
+  const s = bt.summary, ev = bt.segments.event_weeks, m = bt.meta;
+  const good = (x) => (x >= 0 ? "good" : "bad");
+  const t1 = tile("Forecast value add", `${signed(s.fva_pinball_pct)}%`, "pinball loss vs statistical baseline");
+  t1.querySelector(".v").classList.add(good(s.fva_pinball_pct));
+  const t2 = tile("Inventory cost", `${signed(-s.cost_saving_pct)}%`, "leftovers + lost margin vs baseline");
+  t2.querySelector(".v").classList.add(good(s.cost_saving_pct));
+  const t3 = tile("In event weeks", `${signed(ev.fva_pinball_pct ?? 0)}%`, "value add on holiday and promotion weeks");
+  t3.querySelector(".v").classList.add(good(ev.fva_pinball_pct ?? 0));
+  const t4 = tile("LLM judgment vs rule", `${signed(s.fva_vs_rule_pct ?? 0)}%`, "vs a classical uplift rule on the same evidence");
+  t4.querySelector(".v").classList.add(good(s.fva_vs_rule_pct ?? 0));
+  const t5 = tile("90% interval coverage", pct(s.agent_cal.coverage_90), "target 90%");
+  const intro = el("p", { class: "meta", style: "margin-top:0",
+    text: `${fmt(m.n_forecasts)} one-week-ahead forecasts (${m.n_series} SKUs, ${m.weeks[0]} to ${m.weeks[1]}), `
+      + `${m.source === "synthetic" ? "synthetic store" : "real M5 Walmart sales"}, model ${bt.llm.model}, `
+      + `${bt.llm.samples_per_forecast} samples each. Calibration is fit only on earlier weeks.` });
+  const cases = (bt.best || []).map((c) => el("button", { class: "case", onclick: () => {
+      $("sku").value = c.sku_id; fillWeeks(c.target_index);
+      if ($("week").value != c.target_index) { $("week").append(el("option", { value: c.target_index, text: c.week })); $("week").value = c.target_index; }
+      $("notes").value = ""; runForecast(); window.scrollTo({ top: 0, behavior: "smooth" });
+    } },
+    el("div", { class: "k", text: `${c.week} · ${(c.events || []).join("; ") || "no event"}` }),
+    el("div", { text: c.title }),
+    el("div", { class: "k", text: `actual ${fmt(c.actual)} · baseline ${fmt(c.baseline_median)} · ShelfCast ${fmt(c.agent_median)}` })));
+  const tabs = BACKTESTS.length > 1 ? el("div", { class: "tabs", role: "tablist" }, ...BACKTESTS.map((b, i) =>
+    el("button", { type: "button", role: "tab", "aria-selected": String(i === k), class: i === k ? "on" : "",
+      text: b.meta.source === "synthetic" ? "Synthetic store" : `M5 Walmart (${b.meta.n_series} SKUs, real sales)`,
+      onclick: () => renderBacktest(i) }))) : null;
+  $("backtest").replaceChildren(...[tabs, intro].filter(Boolean), el("div", { class: "tiles" }, t1, t2, t3, t4, t5), methodsTable(s),
+    cases.length ? el("h2", { style: "margin-top:18px", text: "Biggest wins (click to replay)" }) : null,
+    cases.length ? el("div", { class: "cases" }, ...cases) : null);
+}
+
+function renderBench(b) {
+  if (!b.levels) return;
+  const best = b.levels.reduce((x, y) => (y.forecasts_per_min > x.forecasts_per_min ? y : x));
+  const tiles = el("div", { class: "tiles" },
+    tile("Throughput", `${fmt(best.forecasts_per_min)}/min`, `forecasts at ${best.concurrency} concurrent, ${b.n_samples} samples each`, "accent"),
+    tile("Generation speed", `${fmt(best.output_tok_per_s)} tok/s`, "output tokens, one GPU"),
+    tile("Cost", `$${best.usd_per_1k_forecasts.toFixed(3)}`, `per 1,000 forecasts at $${b.price_per_hour}/GPU-hour`),
+    tile("Structured output", pct(best.parse_rate), "samples that parsed as valid JSON"));
+  const rows = b.levels.map((r) => el("tr", {}, el("td", { text: String(r.concurrency) }),
+    el("td", { text: fmt(r.forecasts_per_min) }), el("td", { text: fmt(r.output_tok_per_s) }),
+    el("td", { text: `${r.p50_latency_s.toFixed(2)}s` }), el("td", { text: `${r.p95_latency_s.toFixed(2)}s` }),
+    el("td", { text: `$${r.usd_per_1k_forecasts.toFixed(3)}` })));
+  const table = el("div", { class: "scroll" }, el("table", {}, el("thead", {}, el("tr", {},
+    ...["Concurrent forecasts", "Forecasts/min", "Output tok/s", "p50 latency", "p95 latency", "$ / 1k forecasts"]
+      .map((h) => el("th", { text: h })))), el("tbody", {}, ...rows)));
+  $("bench").replaceChildren(el("p", { class: "meta", style: "margin-top:0",
+    text: `Model ${b.model} served by vLLM. Each forecast draws ${b.n_samples} samples in one request; the prompt is prefilled once.` }),
+    tiles, table, b.gpu_info ? el("details", {}, el("summary", { text: "GPU on the serving host" }), el("pre", { text: b.gpu_info })) : null);
+}
+
+async function init() {
+  $("examples").replaceChildren(...EXAMPLES.map((t) => el("button", { type: "button", text: t,
+    onclick: () => { $("notes").value = t; } })));
+  [INFO, SKUS] = await Promise.all([getJSON("/api/info"), getJSON("/api/skus")]);
+  renderChips();
+  $("sku").replaceChildren(...SKUS.map((s) => el("option", { value: s.sku_id, text: `${s.title} · ${s.category}` })));
+  // Open on an upcoming holiday week if there is one: that is where the baseline struggles.
+  let pick = SKUS[0], idx = null;
+  const upcoming = (s, re) => s.weeks.find((x) => x.index >= s.default_index && re.test(x.label));
+  for (const re of [/Thanksgiving/, /Christmas|Halloween|Super Bowl|Independence/]) {
+    const s = SKUS.find((x) => x.sku_id === "BAK-001" && upcoming(x, re)) || SKUS.find((x) => upcoming(x, re));
+    if (s) { pick = s; idx = upcoming(s, re).index; break; }
+  }
+  $("sku").value = pick.sku_id; fillWeeks(idx);
+  $("sku").addEventListener("change", () => { fillWeeks(); updateEcon(); });
+  ["margin", "overage"].forEach((id) => $(id).addEventListener("input", updateEcon));
+  $("go").addEventListener("click", runForecast);
+  updateEcon();
+  getJSON("/api/backtest").then(renderBacktests).catch(() => {});
+  getJSON("/api/bench").then(renderBench).catch(() => {});
+  runForecast();
+}
+init().catch((e) => { $("result").replaceChildren(el("div", { class: "banner warn", text: `Could not load: ${e.message}` })); });
+</script>
+</body>
+</html>
