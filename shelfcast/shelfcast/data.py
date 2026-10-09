@@ -408,6 +408,8 @@ def load_m5(
         raise FileNotFoundError(f"{sorted(missing)} not found under {data_dir}; run download_m5 first")
 
     cal = pd.read_csv(files["calendar.csv"])
+    if "d" not in cal.columns:  # some mirrors drop it; rows are consecutive days from d_1
+        cal["d"] = [f"d_{i + 1}" for i in range(len(cal))]
     sales = pd.read_csv(files["sales_train_evaluation.csv"])
     d_cols = [c for c in sales.columns if c.startswith("d_")]
     cal = cal.set_index("d").loc[d_cols].reset_index()

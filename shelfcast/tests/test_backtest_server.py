@@ -157,3 +157,30 @@ def test_cli_offline_backtest_writes_reports(tmp_path, synthetic, capsys):
     res = json.loads((tmp_path / "out" / f"backtest_{synthetic.name}.json").read_text())
     assert res["llm"]["llm_ok"] == 0 and res["meta"]["n_forecasts"] == 40
     assert (tmp_path / "out" / f"backtest_{synthetic.name}.md").exists()
+
+
+def test_summary_fills_readme_between_markers(tmp_path, backtest_result, capsys):
+    out = tmp_path / "results"
+    out.mkdir()
+    (out / "backtest_synthetic-store.json").write_text(json.dumps(backtest_result))
+    bench = {"model": "m", "n_samples": 5, "price_per_hour": 1.99, "created_at": "now",
+             "gpu_info": "Card Series: AMD Instinct MI300X",
+             "levels": [{"concurrency": c, "forecasts_per_min": 10.0 * c, "output_tok_per_s": 100.0 * c,
+                         "p50_latency_s": 1.0, "p95_latency_s": 2.0, "usd_per_1k_forecasts": 1.0 / c,
+                         "parse_rate": 1.0} for c in (1, 64)]}
+    (out / "bench.json").write_text(json.dumps(bench))
+    readme = tmp_path / "README.md"
+    readme.write_text("intro\n<!-- RESULTS:START -->\nold\n<!-- RESULTS:END -->\noutro\n")
+    main(["summary", "--out-dir", str(out), "--readme", str(readme)])
+    text = readme.read_text()
+    assert text.startswith("intro\n<!-- RESULTS:START -->\n**Synthetic store**") and text.endswith("<!-- RESULTS:END -->\noutro\n")
+    assert "old" not in text and "one AMD Instinct MI300X" in text and "640 forecasts/min at 64" in text
+    s = backtest_result["summary"]
+    assert f"{s['agent_cal']['scaled_pinball']:.4f}" in text
+    main(["summary", "--out-dir", str(out), "--readme", str(readme)])  # idempotent
+    assert readme.read_text() == text
+
+
+def test_summary_without_results(tmp_path, capsys):
+    main(["summary", "--out-dir", str(tmp_path)])
+    assert "No results yet" in capsys.readouterr().out

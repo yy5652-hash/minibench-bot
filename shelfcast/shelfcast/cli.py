@@ -6,6 +6,7 @@
   backtest            rolling backtest -> results/backtest_<dataset>.json/.md
   bench               throughput benchmark -> results/bench.json/.md
   warm                pre-run forecasts for upcoming weeks so replay mode has them
+  summary             headline numbers from results/, optionally written into the README
   serve               demo web app
 """
 
@@ -132,6 +133,21 @@ def cmd_warm(args) -> None:
     print(f"{sum(r.llm_ok for r in res)}/{len(res)} answered by the model")
 
 
+def cmd_summary(args) -> None:
+    from .report import headline_markdown, write_readme_results
+
+    out = Path(args.out_dir)
+    runs = [json.loads(p.read_text()) for p in sorted(out.glob("backtest_*.json"))]
+    runs.sort(key=lambda r: (r["meta"]["source"] == "synthetic", r["meta"]["dataset"]))
+    bench = json.loads((out / "bench.json").read_text()) if (out / "bench.json").exists() else None
+    block = headline_markdown(runs, bench)
+    print(block)
+    if args.readme:
+        p = Path(args.readme)
+        p.write_text(write_readme_results(p.read_text(), block))
+        print(f"updated {p}")
+
+
 def cmd_serve(args) -> None:
     import uvicorn
 
@@ -197,6 +213,11 @@ def main(argv: list[str] | None = None) -> None:
     sp.add_argument("--weeks", type=int, default=8)
     sp.add_argument("--concurrency", type=int, default=64)
     sp.set_defaults(func=cmd_warm)
+
+    sp = sub.add_parser("summary")
+    sp.add_argument("--out-dir", default="results")
+    sp.add_argument("--readme", help="README to update between the RESULTS markers")
+    sp.set_defaults(func=cmd_summary)
 
     sp = sub.add_parser("serve")
     common(sp)

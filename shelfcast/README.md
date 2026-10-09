@@ -82,8 +82,11 @@ Two datasets:
 
 ### Results
 
-<!-- Replace this block with the headline numbers from results/*.md after the GPU run. -->
-Run `deploy/run_all.sh` on the GPU host; it writes:
+<!-- RESULTS:START -->
+No results yet: run `deploy/run_all.sh` on the GPU host. It fills this section from `results/`.
+<!-- RESULTS:END -->
+
+Full reports written by the run:
 
 | File | Contents |
 |---|---|

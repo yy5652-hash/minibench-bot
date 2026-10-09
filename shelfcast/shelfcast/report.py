@@ -127,3 +127,75 @@ def bench_markdown(res: dict) -> str:
     if res.get("gpu_info"):
         lines += ["", "## GPU", "", "```", res["gpu_info"].strip(), "```"]
     return "\n".join(lines) + "\n"
+
+
+README_START = "<!-- RESULTS:START -->"
+README_END = "<!-- RESULTS:END -->"
+
+
+def _signed(x: float | None) -> str:
+    return "n/a" if x is None else f"{x:+.1f}%"
+
+
+def headline_markdown(backtests: list[dict], bench: dict | None) -> str:
+    """Headline numbers for the README, taken verbatim from the result files."""
+    lines: list[str] = []
+    for bt in backtests:
+        m, s, llm = bt["meta"], bt["summary"], bt["llm"]
+        ev, od = bt["segments"]["event_weeks"], bt["segments"]["ordinary_weeks"]
+        label = "Synthetic store" if m["source"] == "synthetic" else "Real Walmart sales (M5)"
+        lines += [
+            f"**{label}**: {m['n_forecasts']:,} one-week-ahead forecasts, {m['n_series']} SKUs, "
+            f"{m['weeks'][0]} to {m['weeks'][-1]}; model `{llm['model']}`, {llm['samples_per_forecast']} samples "
+            f"each, answered {llm['llm_ok']}/{llm['forecasts']}.",
+            "",
+            "| | Statistical baseline | Uplift rule, no LLM | ShelfCast |",
+            "|---|---:|---:|---:|",
+        ]
+
+        def row(name: str, block: dict, key: str, fmt) -> str:
+            vals = [block.get(k, {}).get(key) for k in ("baseline", "rule_cal", "agent_cal")]
+            return f"| {name} | " + " | ".join("n/a" if v is None else fmt(v) for v in vals) + " |"
+
+        lines += [
+            row("Scaled pinball loss ↓, all weeks", s, "scaled_pinball", lambda v: f"{v:.4f}"),
+            row("Scaled pinball loss ↓, event weeks", ev, "scaled_pinball", lambda v: f"{v:.4f}"),
+            row("Scaled pinball loss ↓, ordinary weeks", od, "scaled_pinball", lambda v: f"{v:.4f}"),
+            row("90% interval coverage (target 90%)", s, "coverage_90", _pct),
+            row("Inventory cost ↓ (leftovers + lost margin)", s, "total_cost", lambda v: f"${v:,.0f}"),
+            row("Fill rate", s, "fill_rate", _pct),
+            "",
+            f"Forecast value add vs the baseline: **{_signed(s.get('fva_pinball_pct'))}** "
+            f"(event weeks {_signed(ev.get('fva_pinball_pct'))}, ordinary weeks {_signed(od.get('fva_pinball_pct'))}); "
+            f"vs the uplift rule: **{_signed(s.get('fva_vs_rule_pct'))}**; "
+            f"inventory cost **{_signed(None if s.get('cost_saving_pct') is None else -s['cost_saving_pct'])}**.",
+            "",
+        ]
+    if bench and bench.get("levels"):
+        best = max(bench["levels"], key=lambda r: r["forecasts_per_min"])
+        gpu = "the serving GPU"
+        info = bench.get("gpu_info") or ""
+        for tag in ("MI355X", "MI325X", "MI300X", "MI300A", "MI250X"):
+            if tag in info:
+                gpu = f"one AMD Instinct {tag}"
+                break
+        lines += [
+            f"**Inference on {gpu}** (`{bench['model']}`, vLLM, {bench['n_samples']} samples per forecast): "
+            f"{best['forecasts_per_min']:,.0f} forecasts/min at {best['concurrency']} concurrent requests, "
+            f"{best['output_tok_per_s']:,.0f} output tokens/s, p95 latency {best['p95_latency_s']:.1f}s, "
+            f"${best['usd_per_1k_forecasts']:.3f} per 1,000 forecasts at ${bench['price_per_hour']:.2f}/GPU-hour; "
+            f"{_pct(best['parse_rate'])} of samples parsed as valid JSON.",
+            "",
+        ]
+    if not lines:
+        return "No results yet: run `deploy/run_all.sh` on the GPU host.\n"
+    return "\n".join(lines)
+
+
+def write_readme_results(readme: str, block: str) -> str:
+    """Replace the text between the RESULTS markers."""
+    if README_START not in readme or README_END not in readme:
+        raise ValueError("README has no RESULTS markers")
+    head, rest = readme.split(README_START, 1)
+    _, tail = rest.split(README_END, 1)
+    return f"{head}{README_START}\n{block.rstrip()}\n{README_END}{tail}"
