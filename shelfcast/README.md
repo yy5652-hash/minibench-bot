@@ -117,8 +117,9 @@ about 3B active parameters per token, which keeps throughput high. Any chat mode
 ROCm works: set `SHELFCAST_LLM_MODEL` for both scripts (for example a 70B dense model in bf16, which
 still fits on one MI300X).
 
-Every model answer is cached in `results/llm_cache.sqlite`. After the GPU is switched off, the
-dashboard keeps working without a model:
+Every model answer is cached in `results/llm_cache.sqlite`. Copy `results/` off the droplet and
+destroy it when you are done: a powered-off GPU droplet is still billed. The dashboard keeps working
+without a model:
 
 ```bash
 python -m shelfcast serve --dataset data/synthetic-store.json --mode replay

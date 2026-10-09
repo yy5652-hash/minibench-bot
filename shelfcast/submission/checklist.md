@@ -12,8 +12,11 @@
 
 ## Build week: 12–18 Oct
 
-- [ ] Start a 1× MI300X droplet. Run `deploy/serve_vllm.sh`, then `deploy/run_all.sh`. Expect about
-      an hour of GPU time; MI300X time is billed by the hour, so stop the droplet when idle.
+- [ ] Start a 1× MI300X droplet. Run `deploy/serve_vllm.sh`, then `SMOKE=1 deploy/run_all.sh`, then
+      the full `deploy/run_all.sh`. Expect about an hour of GPU time for the full run.
+- [ ] Billing: a powered-off GPU droplet is still billed. Copy `results/` off the droplet, then
+      **destroy** it. The credit covers MI300X time only (not volumes, snapshots or backups), expires
+      30 days after it is deposited, and a card on file is charged once it runs out.
 - [ ] Commit `results/` (backtests, benchmark, gpu_info, llm_cache.sqlite). `data/synthetic-store.json`
       is already committed; do not regenerate it, the cache is keyed on it.
 - [ ] Put the real numbers into `README.md` (Results), `submission/lablab_form.md`,
