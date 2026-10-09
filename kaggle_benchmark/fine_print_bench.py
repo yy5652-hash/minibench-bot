@@ -308,9 +308,8 @@ PAIRS = [
             "December 31, 2026."
         ),
         trap=(
-            "Resolves YES if the two countries sign a trade agreement on or before this "
-            "question's close date, August 31, 2026. Events after the close date do not "
-            "count."
+            "Resolves YES only if the two countries sign a trade agreement on or before "
+            "August 31, 2026; signings after that date do not count."
         ),
         control_yes=True,
     ),
@@ -585,9 +584,10 @@ PAIRS = [
         today="2026-09-01",
         title="Will Northvale record a heatwave in summer 2026?",
         background=(
-            "The capital's official Met Office station recorded five days above 35°C in "
-            "July and August 2026, but never more than two in a row. The Met Office's "
-            "Eastport station recorded four consecutive days above 35°C (July 18-21)."
+            "The capital's official Met Office station recorded five days above 35°C between "
+            "June 1 and August 31, 2026, but never more than two in a row. The Met Office's "
+            "official station in Eastport, Northvale, recorded four consecutive days above "
+            "35°C (July 18-21)."
         ),
         control=(
             "Resolves YES if the Met Office's capital station records at least 3 "
@@ -642,9 +642,9 @@ PAIRS = [
         today="2026-07-02",
         title="Will at least 5 states recognize Ostmark's independence by June 30, 2026?",
         background=(
-            "By June 30, 2026, four UN member states had formally recognized Ostmark. Varn, "
-            "a partially recognized state that is not a UN member, also announced "
-            "recognition."
+            "By June 30, 2026, four UN member states had formally recognized Ostmark, and "
+            "Varn, a partially recognized state that is not a UN member, had also formally "
+            "recognized it."
         ),
         control=(
             "Resolves YES if at least 5 UN member states formally recognize Ostmark by June "
@@ -742,12 +742,12 @@ PAIRS = [
             "Grain Council estimated 29.4 million tonnes."
         ),
         control=(
-            "Resolves according to the Agriculture Ministry's latest estimate as of October "
-            "1, 2026."
+            "Resolves YES if the Agriculture Ministry's latest estimate as of October 1, 2026 "
+            "exceeds 30 million tonnes."
         ),
         trap=(
-            "Resolves according to the Northvale Grain Council's latest estimate as of "
-            "October 1, 2026."
+            "Resolves YES if the Northvale Grain Council's latest estimate as of October 1, "
+            "2026 exceeds 30 million tonnes."
         ),
         control_yes=True,
     ),
@@ -756,7 +756,8 @@ PAIRS = [
         today="2026-09-01",
         title="Will the song 'Paper Lanterns' reach #1 in Pellandia in 2026?",
         background=(
-            "'Paper Lanterns' spent two weeks at #1 on Spinlist, a streaming-only chart. On "
+            "'Paper Lanterns' spent two weeks at #1 on Spinlist, a streaming-only chart, in "
+            "May 2026. On "
             "the Official Pellandia Singles Chart it peaked at #3. The chart run ended in "
             "August 2026."
         ),
