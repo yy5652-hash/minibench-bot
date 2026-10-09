@@ -558,16 +558,16 @@ print(isolated_prompt("neg_apple_msft.1"))
 # `ask_joint` shows the model a whole family at once.
 
 # %%
-def _ask(llm, message: str) -> str:
+def _ask(llm, message: str, attempts: int = MAX_API_ATTEMPTS) -> str:
     """llm.prompt with retries. The Kaggle proxy rate-limits bigger models under concurrency, and a dropped call
     must not be mistaken for an incoherent (or unparseable) answer."""
     delay = 2.0
     max_tokens = MAX_OUTPUT_TOKENS
-    for attempt in range(1, MAX_API_ATTEMPTS + 1):
+    for attempt in range(1, attempts + 1):
         try:
             return str(llm.prompt(message, temperature=0, extra_api_params={"max_tokens": max_tokens}))
         except Exception:  # noqa: BLE001 - we re-raise after the last attempt
-            if attempt == MAX_API_ATTEMPTS:
+            if attempt == attempts:
                 raise
             time.sleep(delay + random.random())
             delay = min(delay * 2, 40)
@@ -599,7 +599,10 @@ def _collect(task, llm, df) -> tuple[list[dict], list[str]]:
             remove_run_files=True,
         )
     results = [r.result for r in runs.completed_runs if isinstance(r.result, dict)]
-    errors = [str(getattr(r, "error_message", "") or "unknown error")[:300] for r in runs.errored_runs]
+    errors = [
+        (str(getattr(r, "error_message", "") or "unknown error").strip().splitlines() or ["unknown error"])[-1][:300]
+        for r in runs.errored_runs
+    ]
     return results, errors
 
 
@@ -622,13 +625,22 @@ def score_families(prob_by_qid: dict) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-RESULTS: dict[str, dict] = {}  # model name -> detailed results, for the analysis section
+# model name -> detailed results, for the analysis section. Kept across re-runs of the notebook in the same
+# interactive kernel so a fix in a later cell does not force every model to be re-evaluated.
+RESULTS: dict[str, dict] = globals().get("RESULTS") or {}
+SKIPPED: dict[str, str] = globals().get("SKIPPED") or {}  # model name -> why it could not be evaluated
 
 
 def run_suite(llm) -> dict:
     name = getattr(llm, "name", str(llm))
     if name in RESULTS:
         return RESULTS[name]
+    # Probe once before spending ~160 calls: a model this account cannot use fails fast and is recorded in SKIPPED.
+    try:
+        _ask(llm, isolated_prompt(QUESTIONS.qid.iloc[0]), attempts=3)
+    except Exception as e:  # noqa: BLE001
+        SKIPPED[name] = f"{type(e).__name__}: {str(e)[:300]}"
+        raise RuntimeError(f"{name}: probe call failed, skipping. {SKIPPED[name]}") from e
     iso, iso_errors = _collect(ask_isolated, llm, QUESTIONS[["qid"]])
     iso_p = {r["qid"]: r["p"] for r in iso}
     joint, joint_errors = _collect(ask_joint, llm, pd.DataFrame({"fid": [f["fid"] for f in FAMILIES]}))
@@ -641,6 +653,7 @@ def run_suite(llm) -> dict:
     coverage = float(isolated_df.parsed.mean())
     if coverage < MIN_COVERAGE:
         unparsed = [r["raw"][-200:] for r in iso if r["p"] is None][:2]
+        SKIPPED[name] = f"{coverage:.0%} answered; {len(iso_errors)} API errors; sample: {iso_errors[:1]} {unparsed}"
         raise RuntimeError(
             f"{name}: only {coverage:.0%} of families answered ({len(iso_errors)} API errors, "
             f"{sum(r['p'] is None for r in iso)} unparseable replies). Not scoring. "
@@ -703,6 +716,11 @@ for model_name in ANALYSIS_MODELS:
         print(f"{model_name:45s} {r['score']:5.1f}%")
     except Exception as e:  # keep going if one model is unavailable
         print(f"{model_name:45s} FAILED: {e!r}"[:400])
+
+if SKIPPED:
+    print(f"\n{len(SKIPPED)} model(s) could not be evaluated from this account:")
+    for k, v in SKIPPED.items():
+        print(f"  {k:45s} {v[:160]}")
 
 # %%
 def summarize(results: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
