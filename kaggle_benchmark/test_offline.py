@@ -1,7 +1,7 @@
 """Run the whole benchmark offline against mock LLMs (no Kaggle model proxy needed).
 
 Usage: python kaggle_benchmark/test_offline.py
-Requires: kaggle-benchmarks, scipy, pandas, matplotlib.
+Requires: kaggle-benchmarks, pandas, matplotlib.
 """
 
 import hashlib

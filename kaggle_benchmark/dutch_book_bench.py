@@ -43,7 +43,6 @@ from fractions import Fraction
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import linprog
 
 import kaggle_benchmarks as kbench
 
@@ -434,21 +433,26 @@ def guaranteed_arbitrage(probs, atom_sets, n_atoms):
     """Max guaranteed bookie profit (in $) with stakes of at most $1 per contract.
 
     Equals min ||p - q||_1 over coherent q = convex hull of the atoms' truth vectors (LP duality).
+    The objective is convex and piecewise linear in the atom weights, so the minimum sits where n_atoms - 1 of
+    the "kink" hyperplanes (q_i = p_i, or weight_j = 0) meet. The families are tiny, so we enumerate those points
+    exactly with numpy alone (the Kaggle benchmark image has no scipy).
     """
     p = np.asarray(probs, dtype=float)
     n = len(p)
-    V = np.array([[1.0 if a in s else 0.0 for s in atom_sets] for a in range(n_atoms)])  # atoms x questions
-    # variables: lambda (n_atoms), e_plus (n), e_minus (n)
-    c = np.concatenate([np.zeros(n_atoms), np.ones(n), np.ones(n)])
-    A_eq = np.zeros((n + 1, n_atoms + 2 * n))
-    A_eq[:n, :n_atoms] = V.T
-    A_eq[:n, n_atoms:n_atoms + n] = -np.eye(n)
-    A_eq[:n, n_atoms + n:] = np.eye(n)
-    A_eq[n, :n_atoms] = 1.0
-    b_eq = np.concatenate([p, [1.0]])
-    res = linprog(c, A_eq=A_eq, b_eq=b_eq, bounds=[(0, None)] * (n_atoms + 2 * n), method="highs")
-    assert res.status == 0, res.message
-    return float(res.fun)
+    V = np.array([[1.0 if a in s else 0.0 for a in range(n_atoms)] for s in atom_sets])  # questions x atoms
+    rows = [(V[i], p[i]) for i in range(n)] + [(np.eye(n_atoms)[j], 0.0) for j in range(n_atoms)]
+    best = float(np.abs(V @ np.full(n_atoms, 1 / n_atoms) - p).sum())
+    ones = np.ones(n_atoms)
+    for combo in itertools.combinations(range(len(rows)), n_atoms - 1):
+        A = np.vstack([ones] + [rows[k][0] for k in combo])
+        b = np.array([1.0] + [rows[k][1] for k in combo])
+        if abs(np.linalg.det(A)) < 1e-10:
+            continue
+        lam = np.linalg.solve(A, b)
+        if lam.min() < -1e-9:
+            continue
+        best = min(best, float(np.abs(V @ lam - p).sum()))
+    return best
 
 
 for f in FAMILIES:
@@ -715,9 +719,12 @@ if RESULTS:
     display(worst)
 
 # %%
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except ImportError:  # charts are optional
+    plt = None
 
-if RESULTS:
+if RESULTS and plt is not None:
     fig, axes = plt.subplots(1, 2, figsize=(15, max(4, 0.45 * len(summary) + 1.5)))
     s = summary.iloc[::-1]
     axes[0].barh(s.index, s["score (arbitrage-free %, isolated)"], color="#4C72B0", label="isolated (one question per chat)")

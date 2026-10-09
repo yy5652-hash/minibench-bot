@@ -47,7 +47,7 @@ Every statement is asked **in isolation**, in a fresh chat. Every family is also
 
 ### The metric: how much money can a bookie lock in?
 
-For each family I compute the **guaranteed profit** of a bookie who can trade at most $1 of each contract at the model's quoted prices. By LP duality, that profit equals the L1 distance from the model's answers to the nearest coherent set of probabilities. A small linear program (`scipy.optimize.linprog`) computes it exactly for any family shape. A coherent forecaster gives the bookie $0.
+For each family I compute the **guaranteed profit** of a bookie who can trade at most $1 of each contract at the model's quoted prices. By LP duality, that profit equals the L1 distance from the model's answers to the nearest coherent set of probabilities. A small linear program computes it exactly for any family shape. A coherent forecaster gives the bookie $0.
 
 **Leaderboard score = arbitrage-free rate**: the % of families (asked in isolation) on which the bookie can lock in **at most 5¢**.
 

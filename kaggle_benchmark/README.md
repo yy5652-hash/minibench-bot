@@ -13,7 +13,7 @@ method.
 | `DEV_POST.md` | Draft of the DEV post, with `[[...]]` placeholders to fill from the results |
 
 ```sh
-pip install kaggle-benchmarks==0.6.1 scipy matplotlib nbformat
+pip install kaggle-benchmarks==0.6.1 matplotlib nbformat
 python kaggle_benchmark/test_offline.py      # end-to-end test with mock models
 python kaggle_benchmark/build_notebook.py    # regenerate the .ipynb after editing the .py
 ```
