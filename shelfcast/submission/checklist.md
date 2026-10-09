@@ -25,8 +25,12 @@
 - [ ] Deploy the `Dockerfile` (replay mode) to a free CPU host so the demo URL works during judging.
 - [ ] Make the GitHub repository public, or publish `shelfcast/` as its own public repository.
 
-## Submit before Sun 18 Oct 2026, 15:00
+## Submit before Sun 18 Oct 2026, 10:00 UTC (3:00 AM PDT, per the event schedule)
 
+- [ ] The track brief says: "explain how the prediction was calculated. Do not use a language model as the
+      only forecasting method." Say in the video and slides that the forecast is a statistical baseline plus
+      a classical uplift model, with the LLM as the judgment layer and calibration on top.
+- [ ] Submissions must be original and MIT-compliant (LICENSE is in this folder).
 - [ ] Title, short and long description, track, technology tags, cover image
 - [ ] Video and slide presentation
 - [ ] Public GitHub repository

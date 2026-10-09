@@ -6,6 +6,11 @@ AMD Developer Hackathon: ACT III · Track: **Reinvent Commerce** (demand and inv
 
 ---
 
+> Track brief: "If your product predicts demand, sales, or customer behaviour, explain how the prediction
+> was calculated. Do not use a language model as the only forecasting method." ShelfCast's forecast is a
+> statistical baseline plus a classical uplift model; the LLM is a judgment layer on top, measured against
+> both, and every number it reads is shown in the dashboard.
+
 ## The problem
 
 Every week a store manager decides how many units of each product to order. Order too few and
