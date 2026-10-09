@@ -32,6 +32,13 @@ def _mock_vllm(state: dict) -> FastAPI:
         if state.get("reject_schema") and "response_format" in body:
             return JSONResponse({"object": "error", "message": "response_format not supported",
                                  "type": "BadRequestError", "code": 400}, status_code=400)
+        if state.get("context_error"):
+            return JSONResponse({"object": "error", "message": "This model's maximum context length is 16384 tokens",
+                                 "type": "BadRequestError", "code": 400}, status_code=400)
+        if state.get("fail_once"):
+            state["fail_once"] = False
+            return JSONResponse({"object": "error", "message": "boom", "type": "BadRequestError", "code": 400},
+                                status_code=400)
         n = body.get("n", 1)
         content = "<think>hmm</think>" + json.dumps(ANSWER)
         return {
@@ -99,6 +106,18 @@ def test_client_falls_back_without_guided_decoding(mock_server):
     assert "response_format" not in state["requests"][2]
 
 
+def test_unrelated_400_keeps_guided_json_on(mock_server):
+    from openai import BadRequestError
+
+    url, state = mock_server
+    state["context_error"] = True
+    llm = OpenAICompatibleLLM(_cfg(url))
+    with pytest.raises(BadRequestError):
+        asyncio.run(llm.complete([{"role": "user", "content": "x"}], n=1, schema=OUTPUT_SCHEMA))
+    assert llm._schema_supported is True
+    assert len(state["requests"]) == 1
+
+
 def test_unreachable_endpoint_is_reported():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -131,8 +150,19 @@ def test_bench_against_mock_server(mock_server, synthetic):
                                 progress=None))
     assert [lv["concurrency"] for lv in res["levels"]] == [1, 4]
     lv = res["levels"][1]
-    assert lv["requests"] == 16 and lv["parse_rate"] == 1.0 and lv["usd_per_1k_forecasts"] > 0
+    assert lv["requests"] == 16 and lv["failed"] == 0 and lv["parse_rate"] == 1.0 and lv["usd_per_1k_forecasts"] > 0
     prompts = [r["messages"][-1]["content"] for r in state["requests"]]
     assert len(set(prompts)) == len(prompts) == 32  # no repeated prompt, so no prefix-cache shortcut
     with pytest.raises(ValueError):
         asyncio.run(run_bench(OpenAICompatibleLLM(_cfg(url), cache=ResponseCache(":memory:")), synthetic))
+
+
+def test_bench_survives_a_failed_request(mock_server, synthetic):
+    from shelfcast.bench import run_bench
+
+    url, state = mock_server
+    state["fail_once"] = True
+    res = asyncio.run(run_bench(OpenAICompatibleLLM(_cfg(url)), synthetic, concurrencies=(2,), n_samples=1,
+                                progress=None))
+    lv = res["levels"][0]
+    assert lv["failed"] == 1 and lv["requests"] == 16 and lv["forecasts_per_min"] > 0

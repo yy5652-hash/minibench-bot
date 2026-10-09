@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -20,6 +21,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 DEFAULT_MODEL = "Qwen/Qwen3-30B-A3B-Instruct-2507"
+logger = logging.getLogger(__name__)
 
 
 class LLMUnavailable(RuntimeError):
@@ -184,10 +186,13 @@ class OpenAICompatibleLLM:
         t0 = time.perf_counter()
         try:
             resp = await client.chat.completions.create(**kwargs)
-        except BadRequestError:
-            if "response_format" not in kwargs:
+        except BadRequestError as e:
+            msg = str(e).lower()
+            if "response_format" not in kwargs or not any(
+                    k in msg for k in ("response_format", "json_schema", "guided", "structured")):
                 raise
-            # Server without guided decoding: fall back to plain JSON prompting.
+            # Server without guided decoding: fall back to plain JSON prompting for the rest of the run.
+            logger.warning("endpoint rejected response_format (%s); continuing without guided JSON", str(e)[:200])
             self._schema_supported = False
             kwargs.pop("response_format")
             resp = await client.chat.completions.create(**kwargs)

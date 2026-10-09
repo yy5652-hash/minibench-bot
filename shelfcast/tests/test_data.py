@@ -77,9 +77,12 @@ def _fake_m5(root, n_weeks=120):
     })
     rng = np.random.default_rng(0)
     rows = []
-    for k, (cat, store) in enumerate([("FOODS", "CA_1"), ("FOODS", "TX_1"), ("HOBBIES", "CA_1"), ("HOUSEHOLD", "WI_1")]):
+    for k, (cat, store) in enumerate([("FOODS", "CA_1"), ("FOODS", "TX_1"), ("HOBBIES", "CA_1"), ("HOUSEHOLD", "WI_1"),
+                                      ("HOUSEHOLD", "CA_1")]):
         item = f"{cat}_1_{k:03d}"
         sales = rng.poisson(8 if k != 3 else 0.2, size=days)
+        if k == 4:  # sold well, then nothing during the last 26 weeks (the backtest window)
+            sales[-(26 * 7 + 3):] = 0
         rows.append({"id": f"{item}_{store}_evaluation", "item_id": item, "dept_id": f"{cat}_1", "cat_id": cat,
                      "store_id": store, "state_id": store[:2], **{f"d_{i + 1}": int(v) for i, v in enumerate(sales)}})
     sales = pd.DataFrame(rows)
@@ -96,9 +99,13 @@ def _fake_m5(root, n_weeks=120):
 
 def test_load_m5_weekly(tmp_path):
     _fake_m5(tmp_path)
-    ds = load_m5(tmp_path, n_series=10, min_weekly_mean=20, min_weeks=100)
-    # The near-zero HOUSEHOLD series fails the volume filter.
+    ds = load_m5(tmp_path, n_series=10, min_weekly_mean=20, min_weeks=100, holdout_weeks=0)
+    # The near-zero HOUSEHOLD series and the one that died in the last 26 weeks fail the filters.
     assert {s.category.split(" / ")[0] for s in ds.series} == {"FOODS", "HOBBIES"}
+    # Judged on the weeks before the backtest window, the series that died is still chosen:
+    # the window must not take part in picking the series.
+    ds26 = load_m5(tmp_path, n_series=10, min_weekly_mean=20, min_weeks=70, holdout_weeks=26)
+    assert "HOUSEHOLD" in {s.category.split(" / ")[0] for s in ds26.series}
     s = ds.series[0]
     assert s.n_weeks == 120 and s.week_starts[0] == "2011-01-29"
     assert s.demand.min() > 20 and np.all(s.price == 2.5)

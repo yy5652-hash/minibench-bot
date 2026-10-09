@@ -376,9 +376,9 @@ function renderBacktest(k) {
   const bt = BACKTESTS[k];
   const s = bt.summary, ev = bt.segments.event_weeks, m = bt.meta;
   const good = (x) => (x >= 0 ? "good" : "bad");
-  const t1 = tile("Forecast value add", `${signed(s.fva_pinball_pct)}%`, "pinball loss vs statistical baseline");
+  const t1 = tile("Forecast value add", `${signed(s.fva_pinball_pct)}%`, "pinball loss vs the baseline, both calibrated");
   t1.querySelector(".v").classList.add(good(s.fva_pinball_pct));
-  const t2 = tile("Inventory cost", `${signed(-s.cost_saving_pct)}%`, "leftovers + lost margin vs baseline");
+  const t2 = tile("Inventory cost", `${signed(-s.cost_saving_pct)}%`, "leftovers + lost margin vs the calibrated baseline");
   t2.querySelector(".v").classList.add(good(s.cost_saving_pct));
   const t3 = tile("In event weeks", `${signed(ev.fva_pinball_pct ?? 0)}%`, "value add on holiday and promotion weeks");
   t3.querySelector(".v").classList.add(good(ev.fva_pinball_pct ?? 0));

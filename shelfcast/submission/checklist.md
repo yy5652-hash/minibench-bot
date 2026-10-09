@@ -14,7 +14,8 @@
 
 - [ ] Start a 1× MI300X droplet. Run `deploy/serve_vllm.sh`, then `deploy/run_all.sh`. Expect about
       an hour of GPU time; MI300X time is billed by the hour, so stop the droplet when idle.
-- [ ] Commit `results/` (backtests, benchmark, gpu_info, llm_cache.sqlite).
+- [ ] Commit `results/` (backtests, benchmark, gpu_info, llm_cache.sqlite). `data/synthetic-store.json`
+      is already committed; do not regenerate it, the cache is keyed on it.
 - [ ] Put the real numbers into `README.md` (Results), `submission/lablab_form.md`,
       `video_script.md` and the slides. Report what the backtest says, including any weak spot.
 - [ ] Record the video with the dashboard live on the MI300X.

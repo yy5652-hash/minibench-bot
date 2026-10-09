@@ -64,7 +64,8 @@ the weeks before it, then scored on accuracy and on money:
 
 * **Forecast quality:** scaled pinball loss over 11 quantiles, 80% and 90% interval coverage, WAPE, bias.
 * **Forecast value add (FVA):** the improvement over the statistical baseline, the metric demand
-  planning teams use to judge manual overrides.
+  planning teams use to judge manual overrides. Both sides are calibrated the same way, so
+  calibration is never credited to the model; raw-vs-raw is reported alongside.
 * **Inventory outcome:** order with the newsvendor rule and count the real cost of leftovers and
   lost sales against what actually sold, plus fill rate and stockout weeks.
 * **Ablation:** a classical uplift rule that multiplies the same evidence with no LLM. The gap
@@ -74,7 +75,8 @@ the weeks before it, then scored on accuracy and on money:
 Two datasets:
 
 * **M5 (Walmart), real sales:** 60 item-store series, stratified across food, household and hobbies,
-  with the real event calendar, SNAP benefit days and shelf prices. Items are anonymised, so the
+  with the real event calendar, SNAP benefit days and shelf prices. Series are chosen on the weeks
+  before the backtest window, so the window plays no part in picking them. Items are anonymised, so the
   model cannot lean on product knowledge from pretraining.
 * **Synthetic store:** 20 named products with US holidays, planned promotions, price changes,
   post-promotion dips and unannounced shocks. It powers the interactive demo, including upcoming

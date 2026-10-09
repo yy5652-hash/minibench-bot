@@ -37,11 +37,11 @@ def _table(block: dict) -> list[str]:
 def _headline(block: dict) -> str:
     parts = []
     if "fva_pinball_pct" in block:
-        parts.append(f"forecast value add **{block['fva_pinball_pct']:+.1f}%** (scaled pinball vs baseline)")
+        parts.append(f"forecast value add **{block['fva_pinball_pct']:+.1f}%** (scaled pinball, calibrated agent vs calibrated baseline; raw vs raw {block.get('fva_pinball_raw_pct', 0):+.1f}%)")
     if "fva_vs_rule_pct" in block:
         parts.append(f"vs classical uplift rule **{block['fva_vs_rule_pct']:+.1f}%**")
     if "cost_saving_pct" in block:
-        parts.append(f"inventory cost **{-block['cost_saving_pct']:+.1f}%** vs baseline")
+        parts.append(f"inventory cost **{-block['cost_saving_pct']:+.1f}%** vs calibrated baseline")
     return "; ".join(parts)
 
 
@@ -101,8 +101,9 @@ def backtest_markdown(res: dict) -> str:
     lines += [
         "",
         "Scaled pinball is the mean quantile loss over 11 levels divided by the SKU's mean weekly demand "
-        "(lower is better). FVA is the relative improvement of the calibrated agent over the statistical "
-        "baseline. Calibrated variants are fit only on earlier weeks.",
+        "(lower is better). FVA is the relative improvement of the calibrated agent over the calibrated "
+        "statistical baseline, so calibration is never credited to the model. Calibrated variants are fit "
+        "only on earlier weeks.",
     ]
     return "\n".join(lines) + "\n"
 
@@ -149,12 +150,12 @@ def headline_markdown(backtests: list[dict], bench: dict | None) -> str:
             f"{m['weeks'][0]} to {m['weeks'][-1]}; model `{llm['model']}`, {llm['samples_per_forecast']} samples "
             f"each, answered {llm['llm_ok']}/{llm['forecasts']}.",
             "",
-            "| | Statistical baseline | Uplift rule, no LLM | ShelfCast |",
+            "| (all three calibrated on earlier weeks) | Statistical baseline | Uplift rule, no LLM | ShelfCast |",
             "|---|---:|---:|---:|",
         ]
 
         def row(name: str, block: dict, key: str, fmt) -> str:
-            vals = [block.get(k, {}).get(key) for k in ("baseline", "rule_cal", "agent_cal")]
+            vals = [block.get(k, {}).get(key) for k in ("baseline_cal", "rule_cal", "agent_cal")]
             return f"| {name} | " + " | ".join("n/a" if v is None else fmt(v) for v in vals) + " |"
 
         lines += [
@@ -165,7 +166,7 @@ def headline_markdown(backtests: list[dict], bench: dict | None) -> str:
             row("Inventory cost ↓ (leftovers + lost margin)", s, "total_cost", lambda v: f"${v:,.0f}"),
             row("Fill rate", s, "fill_rate", _pct),
             "",
-            f"Forecast value add vs the baseline: **{_signed(s.get('fva_pinball_pct'))}** "
+            f"Forecast value add vs the calibrated baseline: **{_signed(s.get('fva_pinball_pct'))}** "
             f"(event weeks {_signed(ev.get('fva_pinball_pct'))}, ordinary weeks {_signed(od.get('fva_pinball_pct'))}); "
             f"vs the uplift rule: **{_signed(s.get('fva_vs_rule_pct'))}**; "
             f"inventory cost **{_signed(None if s.get('cost_saving_pct') is None else -s['cost_saving_pct'])}**.",

@@ -377,7 +377,9 @@ def download_m5(data_dir: str | os.PathLike, url: str = M5_URL) -> None:
     zpath = Path(data_dir) / "m5.zip"
     if not zpath.exists():
         print(f"Downloading M5 from {url} ...")
-        urllib.request.urlretrieve(url, zpath)
+        with urllib.request.urlopen(url, timeout=120) as resp, open(zpath, "wb") as out:
+            while chunk := resp.read(1 << 20):
+                out.write(chunk)
     with zipfile.ZipFile(zpath) as z:
         z.extractall(data_dir)
     missing = set(_M5_FILES) - set(_find_m5_files(data_dir))
@@ -392,12 +394,15 @@ def load_m5(
     min_weekly_mean: float = 20.0,
     max_zero_share: float = 0.05,
     min_weeks: int = 104,
+    holdout_weeks: int = 26,
 ) -> Dataset:
     """Weekly M5 series with calendar events, SNAP days and shelf prices.
 
     Picks ``n_series`` item-store series, spread evenly over the three
     categories, among those selling at least ``min_weekly_mean`` units a week
-    over the last year, rarely selling zero and with ``min_weeks`` of history. Weeks are Walmart weeks
+    over the last year, rarely selling zero and with ``min_weeks`` of history,
+    judged on the weeks before the last ``holdout_weeks`` so the backtest window
+    plays no part in choosing them. Weeks are Walmart weeks
     (Saturday to Friday); the partial final week is dropped.
     """
     import pandas as pd
@@ -425,10 +430,11 @@ def load_m5(
     daily = sales[d_cols].to_numpy(dtype=np.float32)
     weekly_all = np.add.reduceat(daily, starts, axis=1)[:, full].astype(float)
 
-    last_year = weekly_all[:, -52:]
+    seen = weekly_all[:, :-holdout_weeks] if holdout_weeks > 0 else weekly_all
+    last_year = seen[:, -52:]
     ok = last_year.mean(axis=1) >= min_weekly_mean
     for r in np.flatnonzero(ok):
-        row = weekly_all[r]
+        row = seen[r]
         first = np.flatnonzero(row > 0)
         live = row[first[0]:] if first.size else row
         if (live == 0).mean() > max_zero_share or live.size < min_weeks:

@@ -30,7 +30,14 @@ def test_backtest_structure(backtest_result, synthetic):
     for m in METHODS:
         s = res["summary"][m]
         assert {"scaled_pinball", "coverage_80", "total_cost", "fill_rate"} <= set(s)
-    assert "fva_pinball_pct" in res["summary"] and "cost_saving_pct" in res["summary"]
+    s = res["summary"]
+    # Headline comparisons are like against like: calibrated agent vs calibrated baseline.
+    assert s["fva_pinball_pct"] == pytest.approx(
+        100 * (1 - s["agent_cal"]["scaled_pinball"] / s["baseline_cal"]["scaled_pinball"]), abs=0.02)
+    assert s["cost_saving_pct"] == pytest.approx(
+        100 * (1 - s["agent_cal"]["total_cost"] / s["baseline_cal"]["total_cost"]), abs=0.02)
+    assert s["fva_pinball_raw_pct"] == pytest.approx(
+        100 * (1 - s["agent"]["scaled_pinball"] / s["baseline"]["scaled_pinball"]), abs=0.02)
     r = res["records"][0]
     assert len(r["agent_cal"]) == len(LEVELS) and len(r["baseline_cal"]) == len(LEVELS)
     assert res["segments"]["event_weeks"]["agent"]["n"] + res["segments"]["ordinary_weeks"]["agent"]["n"] == len(

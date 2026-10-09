@@ -6,6 +6,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY shelfcast ./shelfcast
+COPY data/synthetic-store.json ./data/synthetic-store.json
 COPY results ./results
 # Must match the model the answers were recorded with (part of the cache key).
 ENV SHELFCAST_LLM_MODEL=Qwen/Qwen3-30B-A3B-Instruct-2507 \

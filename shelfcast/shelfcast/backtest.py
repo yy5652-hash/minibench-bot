@@ -80,16 +80,18 @@ def _score(records: list[dict], cfg: BacktestConfig) -> dict:
     out = {}
     for m in METHODS:
         out[m] = {**summarize(records, m), **_inventory(records, m, cfg)}
-    b, a = out["baseline"], out["agent_cal"]
+    # Like against like: the calibrated agent against the calibrated baseline and rule,
+    # so calibration itself is never credited to the model. Raw-vs-raw is kept alongside.
+    b, a, r = out["baseline_cal"], out["agent_cal"], out["rule_cal"]
     if b.get("scaled_pinball"):
         out["fva_pinball_pct"] = round(100 * (1 - a["scaled_pinball"] / b["scaled_pinball"]), 2)
-        out["fva_pinball_raw_agent_pct"] = round(100 * (1 - out["agent"]["scaled_pinball"] / b["scaled_pinball"]), 2)
-    if b.get("scaled_pinball") and out["rule_cal"].get("scaled_pinball"):
-        out["fva_vs_rule_pct"] = round(100 * (1 - a["scaled_pinball"] / out["rule_cal"]["scaled_pinball"]), 2)
+        out["fva_pinball_raw_pct"] = round(
+            100 * (1 - out["agent"]["scaled_pinball"] / out["baseline"]["scaled_pinball"]), 2)
+    if b.get("scaled_pinball") and r.get("scaled_pinball"):
+        out["fva_vs_rule_pct"] = round(100 * (1 - a["scaled_pinball"] / r["scaled_pinball"]), 2)
     if b.get("total_cost"):
         out["cost_saving_pct"] = round(100 * (1 - a["total_cost"] / b["total_cost"]), 2)
-        out["cost_saving_vs_calibrated_baseline_pct"] = round(
-            100 * (1 - a["total_cost"] / out["baseline_cal"]["total_cost"]), 2)
+        out["cost_saving_raw_pct"] = round(100 * (1 - out["agent"]["total_cost"] / out["baseline"]["total_cost"]), 2)
     return out
 
 

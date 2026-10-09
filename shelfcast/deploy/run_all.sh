@@ -26,7 +26,10 @@ else
 fi
 CACHE=results/llm_cache.sqlite
 
-if [ ! -d .venv ]; then python3 -m venv .venv; fi
+if [ ! -f .venv/bin/activate ]; then
+  rm -rf .venv
+  python3 -m venv .venv || { echo "python3 -m venv failed: install python3-venv (apt install python3-venv) and rerun"; exit 1; }
+fi
 . .venv/bin/activate
 pip install -q --upgrade pip
 pip install -q -r requirements.txt
@@ -44,13 +47,15 @@ elif command -v rocm-smi >/dev/null 2>&1; then rocm-smi --showproductname --show
 fi
 
 echo "== datasets"
-python -m shelfcast data synthetic --out data/synthetic-store.json
+# The synthetic store is committed so the replay cache matches it exactly; only build it if missing.
+[ -f data/synthetic-store.json ] || python -m shelfcast data synthetic --out data/synthetic-store.json
 if [ "${SKIP_M5:-0}" != "1" ]; then
   python -m shelfcast data m5 --n-series "$M5_SERIES" --out "$M5_DATA"
 fi
 
 echo "== inference benchmark"
-python -m shelfcast bench --dataset data/synthetic-store.json --concurrency "$BENCH_LEVELS" --out-dir "$OUT"
+python -m shelfcast bench --dataset data/synthetic-store.json --concurrency "$BENCH_LEVELS" --out-dir "$OUT" \
+  || echo "!! benchmark failed; continuing with the backtests (rerun: python -m shelfcast bench)"
 
 echo "== backtests"
 if [ "${SKIP_M5:-0}" != "1" ]; then

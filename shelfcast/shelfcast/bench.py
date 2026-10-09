@@ -18,7 +18,7 @@ import numpy as np
 
 from .agent import OUTPUT_SCHEMA, ForecastAgent, parse_adjustment
 from .data import Dataset
-from .llm import OpenAICompatibleLLM
+from .llm import LLMUnavailable, OpenAICompatibleLLM
 
 
 def gpu_info() -> str | None:
@@ -69,13 +69,19 @@ async def run_bench(
             raise ValueError("not enough distinct prompts for the benchmark; use a larger dataset")
         sem = asyncio.Semaphore(c)
         lat: list[float] = []
-        out_tok = in_tok = parsed = total = 0
+        out_tok = in_tok = parsed = total = failed = 0
 
         async def one(msgs):
-            nonlocal out_tok, in_tok, parsed, total
+            nonlocal out_tok, in_tok, parsed, total, failed
             async with sem:
                 t0 = time.perf_counter()
-                comp = await llm.complete(msgs, n=n_samples, schema=OUTPUT_SCHEMA)
+                try:
+                    comp = await llm.complete(msgs, n=n_samples, schema=OUTPUT_SCHEMA)
+                except Exception as e:  # count it; a benchmark must not die on one request
+                    failed += 1
+                    if progress:
+                        progress(f"request failed at concurrency {c}: {type(e).__name__}: {str(e)[:120]}")
+                    return
                 lat.append(time.perf_counter() - t0)
             out_tok += comp.completion_tokens
             in_tok += comp.prompt_tokens
@@ -85,15 +91,19 @@ async def run_bench(
         t0 = time.perf_counter()
         await asyncio.gather(*(one(m) for m in batch))
         wall = time.perf_counter() - t0
-        per_hour = 3600.0 * n_req / wall
+        done = n_req - failed
+        if done == 0:
+            raise LLMUnavailable(f"every request failed at concurrency {c}")
+        per_hour = 3600.0 * done / wall
         row = {
             "concurrency": c,
             "requests": n_req,
+            "failed": failed,
             "wall_s": round(wall, 2),
-            "forecasts_per_min": round(60.0 * n_req / wall, 1),
+            "forecasts_per_min": round(60.0 * done / wall, 1),
             "output_tok_per_s": round(out_tok / wall, 1),
             "total_tok_per_s": round((out_tok + in_tok) / wall, 1),
-            "mean_prompt_tokens": round(in_tok / n_req, 1),
+            "mean_prompt_tokens": round(in_tok / done, 1),
             "mean_completion_tokens_per_sample": round(out_tok / max(total, 1), 1),
             "p50_latency_s": round(float(np.percentile(lat, 50)), 3),
             "p95_latency_s": round(float(np.percentile(lat, 95)), 3),
@@ -103,7 +113,8 @@ async def run_bench(
         levels.append(row)
         if progress:
             progress(f"concurrency {c:>4}: {row['forecasts_per_min']:>8.1f} forecasts/min, "
-                     f"{row['output_tok_per_s']:>8.1f} out tok/s, p95 {row['p95_latency_s']:.2f}s")
+                     f"{row['output_tok_per_s']:>8.1f} out tok/s, p95 {row['p95_latency_s']:.2f}s"
+                     + (f", {failed} failed" if failed else ""))
 
     return {
         "model": llm.model,
