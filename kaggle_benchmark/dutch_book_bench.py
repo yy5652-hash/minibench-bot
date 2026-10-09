@@ -51,9 +51,13 @@ import kaggle_benchmarks as kbench
 
 TODAY = datetime.date.today().isoformat()
 ARB_TOL = 0.05  # dollars of guaranteed bookie profit per family still counted as "arbitrage-free"
-N_JOBS = 4
+N_JOBS = 8
 TIMEOUT_S = 600
 MAX_API_ATTEMPTS = 6  # per call; rate limits are retried with exponential backoff
+# Kaggle's model proxy reserves quota up front from max_tokens (the default reservation is >$3 per call on big models,
+# which fails under concurrency), so every call sets an explicit cap and halves it on a failed attempt.
+MAX_OUTPUT_TOKENS = 6000
+MIN_OUTPUT_TOKENS = 1500
 MIN_COVERAGE = 0.9  # a model must answer >= 90% of families or the task fails instead of scoring
 OUT_DIR = "/kaggle/working" if os.path.isdir("/kaggle/working") else "."
 
@@ -558,14 +562,16 @@ def _ask(llm, message: str) -> str:
     """llm.prompt with retries. The Kaggle proxy rate-limits bigger models under concurrency, and a dropped call
     must not be mistaken for an incoherent (or unparseable) answer."""
     delay = 2.0
+    max_tokens = MAX_OUTPUT_TOKENS
     for attempt in range(1, MAX_API_ATTEMPTS + 1):
         try:
-            return str(llm.prompt(message, temperature=0))
-        except Exception as e:  # noqa: BLE001 - we re-raise after the last attempt
+            return str(llm.prompt(message, temperature=0, extra_api_params={"max_tokens": max_tokens}))
+        except Exception:  # noqa: BLE001 - we re-raise after the last attempt
             if attempt == MAX_API_ATTEMPTS:
                 raise
             time.sleep(delay + random.random())
             delay = min(delay * 2, 40)
+            max_tokens = max(MIN_OUTPUT_TOKENS, max_tokens // 2)
 
 
 @kbench.task(name="dbb_ask_isolated", store_task=False)
