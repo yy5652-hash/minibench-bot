@@ -689,7 +689,8 @@ def run_suite(llm) -> dict:
     except Exception as e:  # noqa: BLE001
         SKIPPED[name] = f"{type(e).__name__}: {str(e)[:300]}"
         raise RuntimeError(f"{name}: probe call failed, skipping. {SKIPPED[name]}") from e
-    burst, burst_errors = _collect(ask_isolated, llm, QUESTIONS[["qid"]].head(N_JOBS), attempts=1)
+    # attempts=2 so a model that rejects the reasoning parameter gets its one retry without it.
+    burst, burst_errors = _collect(ask_isolated, llm, QUESTIONS[["qid"]].head(N_JOBS), attempts=2)
     if len(burst_errors) > N_JOBS // 4:
         SKIPPED[name] = f"{len(burst_errors)}/{N_JOBS} concurrent calls failed: {burst_errors[:1]}"
         raise RuntimeError(f"{name}: burst probe failed, skipping. {SKIPPED[name]}")
