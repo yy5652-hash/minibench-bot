@@ -725,6 +725,10 @@ def run_suite(llm) -> dict:
     ),
 )
 def dutch_book_bench(llm) -> float:
+    # The leaderboard run must be a real one: in a batch (saved-version / "Evaluate More Models") run, ignore any
+    # cached result for this model so the run file carries the model's actual conversations.
+    if os.environ.get("KAGGLE_KERNEL_RUN_TYPE", "").lower() == "batch":
+        RESULTS.pop(getattr(llm, "name", str(llm)), None)
     res = run_suite(llm)
     fam = res["families"]
     iso = fam[fam["mode"] == "isolated"]
