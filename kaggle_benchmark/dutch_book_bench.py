@@ -661,8 +661,7 @@ def load_cache() -> int:
                 RESULTS[m] = dict(model=r["model"], score=r["score"], api_errors=r.get("api_errors", 0),
                                   families=pd.DataFrame(r["families"]), raw_isolated=r["raw_isolated"])
                 n += 1
-        for m, why in payload.get("skipped", {}).items():
-            SKIPPED.setdefault(m, why)
+        # "skipped" reasons are session-specific (quota, outages), so they are reported but never reloaded.
     return n
 
 
@@ -698,6 +697,7 @@ def run_suite(llm) -> dict:
             f"Sample error: {iso_errors[:1]} Sample reply: {unparsed}"
         )
     raw = {r["qid"]: r["raw"] for r in iso}
+    SKIPPED.pop(name, None)
     RESULTS[name] = dict(
         model=name,
         families=pd.concat([isolated_df, joint_df], ignore_index=True),
