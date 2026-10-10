@@ -574,7 +574,7 @@ def _ask(llm, message: str, attempts: int = MAX_API_ATTEMPTS) -> str:
         except Exception as e:  # noqa: BLE001 - we re-raise after the last attempt
             if attempt == attempts:
                 raise
-            if reasoning is not None and "reasoning" in str(e).lower():
+            if reasoning is not None and any(w in str(e).lower() for w in ("reasoning", "thinking")):
                 reasoning = None  # the model does not take a reasoning parameter; retry without it
                 continue
             time.sleep(delay + random.random())
