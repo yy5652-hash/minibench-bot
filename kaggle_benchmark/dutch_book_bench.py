@@ -575,8 +575,8 @@ def _ask(llm, message: str, attempts: int = MAX_API_ATTEMPTS) -> str:
 
 
 @kbench.task(name="dbb_ask_isolated", store_task=False)
-def ask_isolated(llm, qid: str) -> dict:
-    reply = _ask(llm, isolated_prompt(qid))
+def ask_isolated(llm, qid: str, attempts: int = MAX_API_ATTEMPTS) -> dict:
+    reply = _ask(llm, isolated_prompt(qid), attempts=attempts)
     return dict(qid=qid, p=parse_probability(reply), raw=reply[-600:])
 
 
@@ -587,7 +587,7 @@ def ask_joint(llm, fid: str) -> dict:
     return dict(fid=fid, ps=parse_joint(reply, n), raw=reply[-1200:])
 
 
-def _collect(task, llm, df) -> tuple[list[dict], list[str]]:
+def _collect(task, llm, df, **grid) -> tuple[list[dict], list[str]]:
     with kbench.client.enable_cache():
         runs = task.evaluate(
             llm=[llm],
@@ -597,6 +597,7 @@ def _collect(task, llm, df) -> tuple[list[dict], list[str]]:
             max_attempts=1,
             on_failure="continue",
             remove_run_files=True,
+            **{k: [v] for k, v in grid.items()},
         )
     results = [r.result for r in runs.completed_runs if isinstance(r.result, dict)]
     errors = [
@@ -672,12 +673,18 @@ def run_suite(llm) -> dict:
     name = getattr(llm, "name", str(llm))
     if name in RESULTS:
         return RESULTS[name]
-    # Probe once before spending ~160 calls: a model this account cannot use fails fast and is recorded in SKIPPED.
+    # Probe before spending ~160 calls: one call, then a burst of N_JOBS concurrent calls without retries. A model
+    # this account cannot use, or a quota that is nearly exhausted (the proxy reserves each call's cost up front,
+    # so single calls can pass while concurrent ones fail), fails fast here and is recorded in SKIPPED.
     try:
         _ask(llm, isolated_prompt(QUESTIONS.qid.iloc[0]), attempts=3)
     except Exception as e:  # noqa: BLE001
         SKIPPED[name] = f"{type(e).__name__}: {str(e)[:300]}"
         raise RuntimeError(f"{name}: probe call failed, skipping. {SKIPPED[name]}") from e
+    burst, burst_errors = _collect(ask_isolated, llm, QUESTIONS[["qid"]].head(N_JOBS), attempts=1)
+    if len(burst_errors) > N_JOBS // 4:
+        SKIPPED[name] = f"{len(burst_errors)}/{N_JOBS} concurrent calls failed: {burst_errors[:1]}"
+        raise RuntimeError(f"{name}: burst probe failed, skipping. {SKIPPED[name]}")
     iso, iso_errors = _collect(ask_isolated, llm, QUESTIONS[["qid"]])
     iso_p = {r["qid"]: r["p"] for r in iso}
     joint, joint_errors = _collect(ask_joint, llm, pd.DataFrame({"fid": [f["fid"] for f in FAMILIES]}))
