@@ -52,7 +52,7 @@ import kaggle_benchmarks as kbench
 TODAY = datetime.date.today().isoformat()
 ARB_TOL = 0.05  # dollars of guaranteed bookie profit per family still counted as "arbitrage-free"
 N_JOBS = 8
-TIMEOUT_S = 600
+TIMEOUT_S = 180
 MAX_API_ATTEMPTS = 6  # per call; rate limits are retried with exponential backoff
 # Kaggle's model proxy reserves quota up front from max_tokens (the default reservation is >$3 per call on big models,
 # which fails under concurrency), so every call sets an explicit cap and halves it on a failed attempt.
