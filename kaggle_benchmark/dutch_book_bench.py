@@ -734,7 +734,7 @@ def run_suite(llm) -> dict:
     name="dutch_book_bench",
     description=(
         "Can you Dutch-book an LLM forecaster? 37 families of related probability questions (28 about 2027-2050, "
-        "9 dice/card controls), each asked in a fresh chat. Score = % of families a bookie cannot arbitrage for >5c."
+        "9 dice/card controls), each asked in a fresh chat. Score = share of families a bookie cannot arbitrage for >5c."
     ),
 )
 def dutch_book_bench(llm) -> float:
@@ -765,7 +765,7 @@ def dutch_book_bench(llm) -> float:
             )
         except Exception as e:  # noqa: BLE001 - the reflection is informational only
             print(f"(reflection call failed: {e!r})"[:200])
-    return res["score"]
+    return res["score"] / 100  # the leaderboard renders a float in [0, 1] as a percentage
 
 
 # ==== RUN ====
