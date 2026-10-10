@@ -799,7 +799,13 @@ for model_name in ANALYSIS_MODELS:
         print(f"{model_name:45s} {r['score']:5.1f}%")
     except Exception as e:  # keep going if one model is unavailable
         print(f"{model_name:45s} FAILED: {e!r}"[:400])
+        continue
     save_cache()
+    # Also print the model's compact result (no raw replies) so it survives in the notebook output even if the
+    # interactive session dies: DBBCACHE{...}DBBCACHE lines can be parsed back out of a downloaded notebook.
+    print("DBBCACHE" + json.dumps({"results": {model_name: dict(
+        model=r["model"], score=r["score"], api_errors=r.get("api_errors", 0),
+        families=r["families"].to_dict("records"), raw_isolated={})}, "skipped": {}}) + "DBBCACHE")
 
 if SKIPPED:
     print(f"\n{len(SKIPPED)} model(s) could not be evaluated from this account:")
