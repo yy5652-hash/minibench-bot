@@ -56,7 +56,10 @@ TIMEOUT_S = 600
 MAX_API_ATTEMPTS = 6  # per call; rate limits are retried with exponential backoff
 # Kaggle's model proxy reserves quota up front from max_tokens (the default reservation is >$3 per call on big models,
 # which fails under concurrency), so every call sets an explicit cap and halves it on a failed attempt.
-MAX_OUTPUT_TOKENS = 6000
+MAX_OUTPUT_TOKENS = 2500
+# Reasoning effort requested from models that support it. The answers are short, and thinking tokens are what
+# make a 160-call suite expensive on the Kaggle proxy; models that reject the parameter are retried without it.
+REASONING = "low"
 MIN_OUTPUT_TOKENS = 1500
 MIN_COVERAGE = 0.9  # a model must answer >= 90% of families or the task fails instead of scoring
 OUT_DIR = "/kaggle/working" if os.path.isdir("/kaggle/working") else "."
@@ -563,12 +566,17 @@ def _ask(llm, message: str, attempts: int = MAX_API_ATTEMPTS) -> str:
     must not be mistaken for an incoherent (or unparseable) answer."""
     delay = 2.0
     max_tokens = MAX_OUTPUT_TOKENS
+    reasoning = REASONING
     for attempt in range(1, attempts + 1):
         try:
-            return str(llm.prompt(message, temperature=0, extra_api_params={"max_tokens": max_tokens}))
-        except Exception:  # noqa: BLE001 - we re-raise after the last attempt
+            return str(llm.prompt(message, temperature=0, reasoning=reasoning,
+                                  extra_api_params={"max_tokens": max_tokens}))
+        except Exception as e:  # noqa: BLE001 - we re-raise after the last attempt
             if attempt == attempts:
                 raise
+            if reasoning is not None and "reasoning" in str(e).lower():
+                reasoning = None  # the model does not take a reasoning parameter; retry without it
+                continue
             time.sleep(delay + random.random())
             delay = min(delay * 2, 40)
             max_tokens = max(MIN_OUTPUT_TOKENS, max_tokens // 2)
@@ -762,16 +770,19 @@ print("Available models:", sorted(kbench.llms))
 # matters: cheap models from as many providers as possible first, the most expensive last. Models that are not on
 # the roster are skipped; models already in RESULTS (this session or the cache) are not re-run.
 PRIORITY = [
-    "google/gemini-2.5-flash", "openai/gpt-5.4-mini-2026-03-17", "anthropic/claude-haiku-5-5",
-    "xai/grok-4.20-0309-non-reasoning", "deepseek-ai/deepseek-r1-0528", "qwen/qwen3-235b-a22b-instruct-2507",
-    "openai/gpt-oss-120b", "google/gemma-4-31b", "zai/glm-5", "google/gemini-3.5-flash",
-    "openai/gpt-5.4-nano-2026-03-17", "openai/gpt-oss-20b", "google/gemma-4-26b-a4b", "qwen/qwen3-next-80b-a3b-instruct",
-    "qwen/qwen3-next-80b-a3b-thinking", "qwen/qwen3-coder-480b-a35b-instruct", "google/gemini-3.5-flash-lite",
-    "google/gemini-3.6-flash", "google/gemini-3.8-flash", "google/gemini-3-flash-preview",
-    "google/gemini-3.1-flash-lite-preview", "xai/grok-4.20-0309-reasoning", "xai/grok-4.6", "xai/grok-4.5-0708",
-    "anthropic/claude-haiku-4-5@20251001", "anthropic/claude-sonnet-5-5@default", "anthropic/claude-sonnet-5@default",
-    "anthropic/claude-sonnet-4-6@default", "openai/gpt-5.5-2026-04-23", "openai/gpt-5.6-luna", "openai/gpt-5.6-sol",
-    "openai/gpt-5.6-terra", "openai/gpt-6-luna", "openai/gpt-6-sol", "openai/gpt-6-astra", "openai/gpt-6.1-sol",
+    # cheap, non-thinking, many providers
+    "openai/gpt-5.4-nano-2026-03-17", "openai/gpt-5.4-mini-2026-03-17", "google/gemma-4-26b-a4b", "google/gemma-4-31b",
+    "qwen/qwen3-235b-a22b-instruct-2507", "openai/gpt-oss-20b", "xai/grok-4.20-0309-non-reasoning", "zai/glm-5",
+    "google/gemini-3.5-flash-lite", "google/gemini-3.1-flash-lite-preview", "qwen/qwen3-next-80b-a3b-instruct",
+    "openai/gpt-oss-120b", "qwen/qwen3-coder-480b-a35b-instruct", "anthropic/claude-haiku-5-5",
+    # mid-price
+    "google/gemini-3.5-flash", "google/gemini-3.6-flash", "google/gemini-3.8-flash", "google/gemini-3-flash-preview",
+    "google/gemini-2.5-flash", "anthropic/claude-haiku-4-5@20251001", "openai/gpt-5.5-2026-04-23",
+    "openai/gpt-5.6-luna", "openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "xai/grok-4.6", "xai/grok-4.5-0708",
+    # thinking-heavy or expensive
+    "qwen/qwen3-next-80b-a3b-thinking", "deepseek-ai/deepseek-r1-0528", "xai/grok-4.20-0309-reasoning",
+    "anthropic/claude-sonnet-5-5@default", "anthropic/claude-sonnet-5@default", "anthropic/claude-sonnet-4-6@default",
+    "openai/gpt-6-luna", "openai/gpt-6-sol", "openai/gpt-6-astra", "openai/gpt-6.1-sol", "openai/gpt-5.4-2026-03-05",
     "google/gemini-2.5-pro", "google/gemini-3.1-pro-preview", "anthropic/claude-opus-4-5@20251101",
     "anthropic/claude-opus-4-6@default", "anthropic/claude-opus-4-7@default", "anthropic/claude-opus-4-8@default",
     "anthropic/claude-opus-5@default", "anthropic/claude-opus-5-5@default",
