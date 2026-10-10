@@ -49,6 +49,11 @@ import pandas as pd
 
 import kaggle_benchmarks as kbench
 
+try:  # `display` only exists in IPython; the CLI can also run this file as a plain script
+    display
+except NameError:  # pragma: no cover
+    display = print
+
 TODAY = datetime.date.today().isoformat()
 ARB_TOL = 0.05  # dollars of guaranteed bookie profit per family still counted as "arbitrage-free"
 N_JOBS = 8
@@ -729,8 +734,7 @@ def run_suite(llm) -> dict:
     name="dutch_book_bench",
     description=(
         "Can you Dutch-book an LLM forecaster? 37 families of related probability questions (28 about 2027-2050, "
-        "9 dice/card controls), each statement asked in a fresh chat. Score = % of families on which a bookie "
-        "trading <=$1 per contract cannot lock in more than 5 cents of risk-free profit."
+        "9 dice/card controls), each asked in a fresh chat. Score = % of families a bookie cannot arbitrage for >5c."
     ),
 )
 def dutch_book_bench(llm) -> float:
