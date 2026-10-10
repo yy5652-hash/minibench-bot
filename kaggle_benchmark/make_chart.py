@@ -68,7 +68,7 @@ def main(src: str, dst: str) -> None:
     for (i, j), v in np.ndenumerate(vals):
         if not np.isnan(v):
             ax2.text(j, i, f"{v:.0f}", ha="center", va="center", fontsize=9, color="white" if v > 0.55 * im.norm.vmax else TEXT)
-    ax2.set_title("Where the money is: guaranteed profit (¢ per family), isolated", loc="left", fontsize=12, color=TEXT)
+    ax2.set_title("Where the money is: bookie profit, ¢ per family (isolated)", loc="left", fontsize=12, color=TEXT)
     for s in ax2.spines.values():
         s.set_visible(False)
     cb = fig.colorbar(im, ax=ax2, shrink=0.75, pad=0.02)
