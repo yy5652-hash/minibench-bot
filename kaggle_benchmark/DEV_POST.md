@@ -89,7 +89,7 @@ Deadlines ("by 2030 / 2035 / 2040") and thresholds ("above $50k / $100k / …") 
 
 ## My Benchmark
 
-- Kaggle benchmark (leaderboard): https://www.kaggle.com/benchmarks/yy5652/dutch-book-bench
+- Kaggle benchmark (leaderboard): https://www.kaggle.com/benchmarks/yy5652/dutch-book-bench — the leaderboard column is a fresh batch run of the task per model (a subset of the 13 models above, re-run through Kaggle's own task runner, so the numbers differ by the ±8-point run-to-run noise described in finding 5)
 - Kaggle task page (code, per-model outputs, the model's own reaction to its worst Dutch book): https://www.kaggle.com/benchmarks/tasks/yy5652/dutch-book-bench
 - Source, offline test and results: https://github.com/yy5652-hash/minibench-bot/tree/claude/gifted-cori-docto2/kaggle_benchmark
 
