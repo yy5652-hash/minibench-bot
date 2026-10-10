@@ -2,7 +2,7 @@
 title: I tried to Dutch-book 13 LLM forecasters. Asked one question at a time, every one of them paid out.
 published: true
 tags: devchallenge, kagglechallenge, ai, machinelearning
-cover_image: [[upload results/dutch_book_bench.png]]
+cover_image: (upload results/dutch_book_bench.png)
 ---
 
 *This is a submission for the [Kaggle Benchmarking Challenge](https://dev.to/challenges/kaggle-2026-09-23).*
@@ -89,8 +89,8 @@ Deadlines ("by 2030 / 2035 / 2040") and thresholds ("above $50k / $100k / …") 
 
 ## My Benchmark
 
-- Kaggle benchmark: [[benchmark link]]
-- Kaggle notebook (questions, solver, all code): [[notebook link]]
+- Kaggle benchmark (leaderboard): https://www.kaggle.com/benchmarks/yy5652/dutch-book-bench
+- Kaggle task page (code, per-model outputs, the model's own reaction to its worst Dutch book): https://www.kaggle.com/benchmarks/tasks/yy5652/dutch-book-bench
 - Source, offline test and results: https://github.com/yy5652-hash/minibench-bot/tree/claude/gifted-cori-docto2/kaggle_benchmark
 
 Prior work: *Consistency Checks for Language Model Forecasters* (Paleka et al.) also uses arbitrage to score consistency. What's different here: exact-answer controls next to open questions, a direct isolated-vs-joint comparison, one generic LP that turns any family of events into a guaranteed-profit number, and Kaggle's model roster.
