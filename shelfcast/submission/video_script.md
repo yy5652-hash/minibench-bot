@@ -57,3 +57,23 @@ on real sales (1:25-2:00) → the machine underneath (2:00-2:20) → one line, o
 
 Open risk: shots 8-10 only work if the real numbers are good. If one is weak, cut that shot rather
 than soften the caption; do not swap in a number from the synthetic store without labelling it.
+
+## Tooling: reuse before building
+
+Searched GitHub on 10 Oct 2026 for something to reuse rather than hand-rolling a render pipeline.
+Nothing was found that is an Apple-keynote product-video template with real adoption; the popular,
+reusable pieces are the engines. Shortlist, by stars and licence:
+
+| Repository | Stars | Licence | Verdict |
+|---|---:|---|---|
+| `motion-canvas/motion-canvas` | 19k | MIT | **Use this.** Code-driven scenes, precise type and timing, MIT like this project. |
+| `midrender/revideo` | 4k | MIT | Motion Canvas fork with headless rendering. Use if we need to render without the editor. |
+| `motion-canvas/examples` | 1.2k | MIT | Starting scenes to adapt (text reveals, number tweens, chart builds). |
+| `remotion-dev/remotion` | 63k | Remotion licence (free for individuals, not MIT) | Most capable, but its licence is not MIT; keep it out of a repository the rules require to be MIT-compliant. |
+| `zz41354899/SwiftClip` | 44 | MIT | Storyboard-driven Remotion templates; small, and inherits the Remotion licence question. |
+| `calesthio/OpenMontage` | 66k | AGPL-3.0 | Agentic video production system. AGPL: do not vendor. |
+
+Plan: screen-record shots 3, 5-7 and 11 from the live dashboard and terminal (they must be real),
+and build only the type-on-black shots (1, 2, 4, 8-10, 12, 13) as Motion Canvas scenes adapted from
+`motion-canvas/examples`. Nothing is built yet: the number shots wait for the GPU results. When it is
+built, list here which example scenes were adapted and what was changed.
