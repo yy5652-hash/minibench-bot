@@ -744,6 +744,23 @@ def dutch_book_bench(llm) -> float:
     print(f"{res['model']}: arbitrage-free rate {res['score']:.1f}% "
           f"| mean guaranteed arbitrage {100 * iso.arbitrage.mean():.1f}¢/family "
           f"| parse failures {int((~iso.parsed).sum())} | API errors {res['api_errors']}")
+    # Show the model its own most Dutch-bookable family and let it react. This one call also gives the leaderboard
+    # run a conversation of its own (the 160 question calls live in sub-runs whose files are not kept).
+    worst = iso[iso.parsed].sort_values("arbitrage", ascending=False).head(1)
+    if len(worst):
+        row = worst.iloc[0]
+        qs = FAMILY_BY_ID[row.fid]["questions"]
+        lines = "\n".join(f"- {p:.2f}: {q['text']}" for p, q in zip(json.loads(row.probs), qs))
+        try:
+            llm.prompt(
+                "Earlier, asked each statement below in a separate conversation, you gave these probabilities:\n"
+                f"{lines}\n\nA bookmaker trading at most $1 of each contract at your prices can lock in "
+                f"{100 * row.arbitrage:.0f} cents whatever happens. In two sentences: what went wrong, and which "
+                "numbers would you change?",
+                temperature=0, reasoning=REASONING, extra_api_params={"max_tokens": 400},
+            )
+        except Exception as e:  # noqa: BLE001 - the reflection is informational only
+            print(f"(reflection call failed: {e!r})"[:200])
     return res["score"]
 
 
