@@ -72,7 +72,7 @@ Deadlines ("by 2030 / 2035 / 2040") and thresholds ("above $50k / $100k / …") 
 - `claude-opus-4-7`, climate conjunction: P(A) = 0.35, P(B) = 0.38, P(both) = 0.28, P(at least one) = **0.90**. **45¢**.
 - "Which of 2027–2030 will be the warmest year", four mutually exclusive answers: `qwen3-235b` 1.37, `haiku-4-5` 1.32, `gpt-5.4-mini` 1.31. The 2030 World Cup partition goes the other way for `gpt-oss-20b`: six exhaustive outcomes that sum to **0.36**.
 
-**4. The best model was the cheapest one, and price barely predicts coherence.** `gemini-3.7-flash` (2.0¢/family) beat every Claude Opus (3.9–5.4¢). `gemini-3.1-flash-lite-preview`, a lite model, tied `claude-haiku-5-5` at 78%. The one clear pattern is at the bottom: the two smallest open-weight models (`gpt-oss-20b`, `qwen3-235b`) are the most Dutch-bookable, almost entirely because of conjunctions (41¢ and 29¢ per family).
+**4. The best model was the cheapest one, and price barely predicts coherence.** `gemini-3.7-flash` (2.0¢/family) beat every Claude Opus (3.9–5.4¢). `gemini-3.1-flash-lite-preview`, a lite model, tied `claude-haiku-5-5` at 78%. The one clear pattern is at the bottom: the two open-weight models (`gpt-oss-20b`, `qwen3-235b`) are the most Dutch-bookable, almost entirely because of conjunctions (41¢ and 29¢ per family).
 
 **5. Temperature 0 is not deterministic on this proxy.** The default model scored 67.6%, 75.7% and 83.8% on three identical runs. A single-run leaderboard number carries roughly ±8 points of noise, so I report family-level cents alongside the headline percentage and treat differences under ~10 points as a tie.
 
