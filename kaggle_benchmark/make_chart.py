@@ -36,7 +36,7 @@ def main(src: str, dst: str) -> None:
     labels = [short(m) for m in score.index]
     n = len(score)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, max(4.2, 0.5 * n + 2.2)), gridspec_kw={"width_ratios": [1.15, 1]})
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, max(4.2, 0.36 * n + 2.2)), gridspec_kw={"width_ratios": [1.15, 1]})
     fig.patch.set_facecolor("white")
 
     # Left: dumbbell per model, isolated vs joint
@@ -49,10 +49,10 @@ def main(src: str, dst: str) -> None:
         ax1.text(v - 1.2, yi, f"{v:.0f}%", va="center", ha="right", color=TEXT, fontsize=9)
     ax1.set_yticks(y, labels)
     ax1.set_xlim(40, 104)
-    ax1.set_ylim(-0.7, n - 0.3 + 1.4)  # headroom for the legend
+    ax1.set_ylim(-0.5, n - 0.5)  # same row positions as the heatmap
     ax1.set_xlabel("% of question families a bookie cannot Dutch-book for more than 5¢ (higher is better)", color=MUTED)
-    ax1.set_title("Coherence collapses when questions are asked separately", loc="left", fontsize=12, color=TEXT)
-    ax1.legend(loc="upper left", frameon=False, fontsize=9)
+    ax1.set_title("Coherence collapses when questions are asked separately", loc="left", fontsize=12, color=TEXT, pad=30)
+    ax1.legend(loc="lower left", bbox_to_anchor=(-0.02, 1.0), ncol=2, frameon=False, fontsize=9, columnspacing=1.2)
     ax1.grid(axis="x", color=GRID, lw=0.8)
     for s in ("top", "right"):
         ax1.spines[s].set_visible(False)
@@ -68,7 +68,7 @@ def main(src: str, dst: str) -> None:
     for (i, j), v in np.ndenumerate(vals):
         if not np.isnan(v):
             ax2.text(j, i, f"{v:.0f}", ha="center", va="center", fontsize=9, color="white" if v > 0.55 * im.norm.vmax else TEXT)
-    ax2.set_title("Where the money is: bookie profit, ¢ per family (isolated)", loc="left", fontsize=12, color=TEXT)
+    ax2.set_title("Where the money is: bookie profit, ¢ per family", loc="left", fontsize=12, color=TEXT, pad=30)
     for s in ax2.spines.values():
         s.set_visible(False)
     cb = fig.colorbar(im, ax=ax2, shrink=0.75, pad=0.02)

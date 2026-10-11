@@ -1,8 +1,8 @@
 ---
-title: I tried to Dutch-book 13 LLM forecasters. Asked one question at a time, every one of them paid out.
+title: I tried to Dutch-book 26 LLM forecasters. Asked one question at a time, every one of them paid out.
 published: true
 tags: devchallenge, kagglechallenge, ai, machinelearning
-cover_image: https://raw.githubusercontent.com/yy5652-hash/minibench-bot/claude/gifted-cori-docto2/kaggle_benchmark/results/dutch_book_bench.png
+cover_image: https://raw.githubusercontent.com/yy5652-hash/minibench-bot/claude/gifted-cori-docto2/kaggle_benchmark/results/dutch_book_bench_26.png
 ---
 
 *This is a submission for the [Kaggle Benchmarking Challenge](https://dev.to/challenges/kaggle-2026-09-23).*
@@ -40,16 +40,23 @@ For each family I compute the **guaranteed profit** of a bookie who can trade at
 
 ## Models Tested
 
-13 models from four providers, everything I could fit into Kaggle's $10/day model quota, cheapest and most diverse first: `gemini-3.7-flash` (the task's default model), `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite-preview`, `claude-haiku-4-5`, `claude-haiku-5-5`, `claude-opus-4-5`, `claude-opus-4-6`, `claude-opus-4-7`, `claude-opus-4-8`, `gpt-5.4-nano`, `gpt-5.4-mini`, `gpt-oss-20b`, `qwen3-235b-a22b-instruct`.
+26 models from six providers (Google, Anthropic, OpenAI, xAI, Alibaba, plus open-weight releases), everything I could fit into Kaggle's $10/day model quota over three days:
 
-Two things worth knowing if you build on Kaggle's proxy. First, it reserves each call's worst-case cost from your quota up front, so with no `max_tokens` the biggest models refuse every concurrent call; my first run silently turned those refusals into "incoherent" scores. The benchmark now caps `max_tokens`, retries, records API errors, and refuses to score a model with low coverage. Second, thinking tokens are what make a 160-call suite expensive, so day-2 models were run with `reasoning="low"`; the seven day-1 models ran at their defaults. `glm-5` returned empty replies on half the questions and was not scored; `gemma-4` and `grok-4.20` were skipped because of a parameter mismatch I found too late. They go in the next run.
+- **Google:** `gemini-3.8-flash`, `gemini-3.7-flash` (the task's default model), `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite-preview`, `gemini-3-flash-preview`, `gemini-3.1-pro-preview`, `gemma-4-31b`
+- **Anthropic:** `claude-haiku-4-5`, `claude-haiku-5-5`, `claude-sonnet-5`, `claude-sonnet-5-5`, `claude-opus-4-5`, `claude-opus-4-6`, `claude-opus-4-7`, `claude-opus-4-8`
+- **OpenAI:** `gpt-5.4-nano`, `gpt-5.4-mini`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-oss-20b`
+- **xAI / Alibaba:** `grok-4.20` (non-reasoning), `qwen3-235b`, `qwen3-next-80b`, `qwen3-coder-480b`
+
+Three things worth knowing if you build on Kaggle's proxy. First, it reserves each call's worst-case cost from your quota up front, so with no `max_tokens` the biggest models refuse every concurrent call; my first run silently turned those refusals into "incoherent" scores. The benchmark now caps `max_tokens`, retries, records API errors, and refuses to score a model with low coverage. Second, thinking tokens are what make a 160-call suite expensive, so everything after day 1 ran with `reasoning="low"` where the model accepts it; the seven day-1 models ran at their defaults. Third, check your parser against the controls: several models answer dice questions as fractions ("Probability: 11/36"), and my parser read that as 0.11. I found it on the last day, fixed it, and re-scored the affected runs from their saved raw replies. It moved two models by one family each.
+
+Not scored: `glm-5` (empty replies on half the questions), `deepseek-r1` and `gemma-4-26b` (ran out of output tokens before giving a number on 40–50% of families), `gpt-oss-120b` (the runner errored), and `grok-4.5` / `grok-4.6` (listed, but the proxy answers 404).
 
 ## Findings
 
-![Isolated vs joint coherence per model, and where the bookie's profit comes from](https://raw.githubusercontent.com/yy5652-hash/minibench-bot/claude/gifted-cori-docto2/kaggle_benchmark/results/dutch_book_bench.png)
+![Isolated vs joint coherence per model, and where the bookie's profit comes from](https://raw.githubusercontent.com/yy5652-hash/minibench-bot/claude/gifted-cori-docto2/kaggle_benchmark/results/dutch_book_bench_26.png)
 
 **1. Every model knows the rules of probability. It just doesn't apply them across separate calls.**
-On the 9 dice-and-card controls, all 13 models are essentially perfectly coherent (≤ 1¢ per family, Brier ≈ 0). Asked a whole family in one prompt, they are 95–100% arbitrage-free. Asked one statement per chat, they drop to **49–84%**. The problem is not ignorance; it is isolation, which is exactly how forecasting bots call these models.
+On the 9 dice-and-card controls, 23 of the 26 models are essentially perfectly coherent (≤ 1¢ per family). Asked a whole family in one prompt, every model is 95–100% arbitrage-free, and 21 of 26 score a clean 100%. Asked one statement per chat, they drop to **49–89%**, 70% on average. The problem is not ignorance; it is isolation, which is exactly how forecasting bots call these models.
 
 **2. The money is in conjunctions, partitions and negations. Monotone families are nearly free.**
 Across all models and families asked in isolation:
@@ -57,26 +64,28 @@ Across all models and families asked in isolation:
 | family type | arbitrage-free rate (isolated) |
 |---|---|
 | conjunction | 49% |
-| partition | 48% |
-| negation | 60% |
-| threshold | 91% |
-| deadline | 92% |
-| story | 96% |
+| partition | 52% |
+| negation | 57% |
+| deadline | 93% |
+| threshold | 94% |
+| story | 95% |
 
-Deadlines ("by 2030 / 2035 / 2040") and thresholds ("above $50k / $100k / …") are mostly fine: models handle *monotone* structure even across calls. The three family types with a *conservation law* (things must add up) are where the bookie eats. The worst single family was the earthquake conjunction (29.5¢ per model on average), the best was anything with a date ladder.
+Deadlines ("by 2030 / 2035 / 2040") and thresholds ("above $50k / $100k / …") are mostly fine: models handle *monotone* structure even across calls. The three family types with a *conservation law* (things must add up) are where the bookie eats. The worst single family was the earthquake conjunction (26¢ per model on average), the best was anything with a date ladder.
 
 **3. The most expensive single answers.** A bookie earns these with zero information:
 - `qwen3-235b`, earthquake conjunction: P(M7+ in California by 2035) = **0.18**, P(M7+ in Kanto) = **0.35**, P(both) = **0.75**, P(at least one) = **0.98**. "Both" is more likely than either part. Worth **$1.20** per $1 of contracts, the maximum this benchmark can award.
 - `gpt-oss-20b`, same family: P(California) = **0.995**, P(Kanto) = **0.015**, P(both) = **0.9996**. **$1.08**.
-- `gpt-5.4-mini`, the Moon: P(someone walks on the Moon before 2029) = **0.74** and P(nobody does) = **0.74**. They sum to **1.48**. `gpt-5.4-nano` did the same (1.43). The model agrees with whichever framing it is shown.
+- `qwen3-next-80b`, two IPOs: P(OpenAI lists) = **0.40**, P(SpaceX lists) = **0.85**, P(both) = **0.10**, P(at least one) = **0.15**. "At least one" is less likely than either. **$1.00**.
+- `grok-4.20` (non-reasoning), on a *control*: asked for P(at least two of five dealt cards share a rank), it reasoned that there are "13 ranks and only 4 suits, so by the pigeonhole principle" five distinct ranks are impossible, and answered **1**. In the next chat it computed P(all five ranks differ) = **0.507**, correctly. **51¢**, on a question with a textbook answer.
+- `gpt-5.4-mini`, the Moon: P(someone walks on the Moon before 2029) = **0.74** and P(nobody does) = **0.74**. They sum to **1.48**. `gpt-5.4-nano` did the same (1.43), and `qwen3-next-80b` went to 1.80 (0.95 and 0.85). The model agrees with whichever framing it is shown.
 - `claude-opus-4-7`, climate conjunction: P(A) = 0.35, P(B) = 0.38, P(both) = 0.28, P(at least one) = **0.90**. **45¢**.
 - "Which of 2027–2030 will be the warmest year", four mutually exclusive answers: `qwen3-235b` 1.37, `haiku-4-5` 1.32, `gpt-5.4-mini` 1.31. The 2030 World Cup partition goes the other way for `gpt-oss-20b`: six exhaustive outcomes that sum to **0.36**.
 
-**4. The best model was the cheapest one, and price barely predicts coherence.** `gemini-3.7-flash` (2.0¢/family) beat every Claude Opus (3.9–5.4¢). `gemini-3.1-flash-lite-preview`, a lite model, tied `claude-haiku-5-5` at 78%. The one clear pattern is at the bottom: the two open-weight models (`gpt-oss-20b`, `qwen3-235b`) are the most Dutch-bookable, almost entirely because of conjunctions (41¢ and 29¢ per family).
+**4. Newer beats bigger. Price barely predicts coherence.** The top three are `gemini-3.8-flash` (89%), `gpt-5.5` and `gemini-3.7-flash` (both 84%). `gemini-3.1-pro-preview` (68%) sits below six Flash and Flash-Lite models from its own family, and every Claude Opus (68–76%) is at or below `claude-haiku-5-5` (78%). What does track coherence is the release generation inside a family: Gemini Flash goes 68 → 78 → 76 → 84 → 89 from 3.0 to 3.8, Haiku 65 → 78 and Sonnet 68 → 76 from one release to the next, GPT 59 (5.4-mini) → 84 (5.5). At the bottom, four of the eight lowest scores are open-weight models (`gpt-oss-20b`, `qwen3-coder-480b`, `qwen3-next-80b`, `qwen3-235b`), almost entirely because of conjunctions (20–41¢ per family).
 
-**5. Temperature 0 is not deterministic on this proxy.** The default model scored 67.6%, 75.7% and 83.8% on three identical runs. A single-run leaderboard number carries roughly ±8 points of noise, so I report family-level cents alongside the headline percentage and treat differences under ~10 points as a tie.
+**5. Temperature 0 is not deterministic on this proxy.** The default model scored 67.6%, 75.7%, 81.1% and 83.8% on four identical runs. A single-run leaderboard number carries roughly ±8 points of noise, so I report family-level cents alongside the headline percentage and treat differences under ~10 points as a tie.
 
-**6. The Linda problem is mostly solved.** Adding a plausible detail ("…aboard a SpaceX Starship") almost never raised the probability (story families 96% arbitrage-free).
+**6. The Linda problem is mostly solved.** Adding a plausible detail ("…aboard a SpaceX Starship") almost never raised the probability (story families 95% arbitrage-free).
 
 ### What I'd measure next
 - Paraphrase robustness: the negation failures look like an *acquiescence* effect, so ask the same family as "Will X happen?" vs "Is it false that X happens?".
@@ -89,7 +98,7 @@ Deadlines ("by 2030 / 2035 / 2040") and thresholds ("above $50k / $100k / …") 
 
 ## My Benchmark
 
-- Kaggle benchmark (leaderboard): https://www.kaggle.com/benchmarks/yy5652/dutch-book-bench — the leaderboard column is a fresh batch run of the task per model (a subset of the 13 models above, re-run through Kaggle's own task runner, so the numbers differ by the ±8-point run-to-run noise described in finding 5)
+- Kaggle benchmark (leaderboard): https://www.kaggle.com/benchmarks/yy5652/dutch-book-bench — the leaderboard column is a batch run of the task per model through Kaggle's own task runner. For the 13 models I added on the last day it is the same run as in the chart; for the earlier ones it is a re-run, so the numbers differ by the ±8-point noise described in finding 5
 - Kaggle task page (code, per-model outputs, the model's own reaction to its worst Dutch book): https://www.kaggle.com/benchmarks/tasks/yy5652/dutch-book-bench
 - Source, offline test and results: https://github.com/yy5652-hash/minibench-bot/tree/claude/gifted-cori-docto2/kaggle_benchmark
 

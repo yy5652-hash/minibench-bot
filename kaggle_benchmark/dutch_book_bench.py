@@ -508,15 +508,20 @@ For each statement below, estimate the probability that it is (or will turn out 
 Think briefly (at most 6 sentences in total), then end your reply with one line per statement in exactly this format:
 {format_lines}"""
 
-_NUM = r"[~≈]?\s*([0-9]*\.?[0-9]+)\s*(%?)"
+# a decimal, a percentage, or a fraction such as 11/36 (models like to answer dice questions that way)
+_NUM = r"[~≈]?\s*([0-9]*\.?[0-9]+(?:\s*/\s*[0-9]*\.?[0-9]+)?)\s*(%?)"
 
 
 def _to_prob(num: str, pct: str) -> float | None:
     try:
-        x = float(num)
-    except ValueError:
+        if "/" in num:
+            a, b = (float(t) for t in num.split("/"))
+            x, pct = a / b, ""
+        else:
+            x = float(num)
+    except (ValueError, ZeroDivisionError):
         return None
-    if pct or 1 < x <= 100:
+    if pct or (1 < x <= 100 and "/" not in num):
         x /= 100
     return x if 0 <= x <= 1 else None
 
@@ -541,6 +546,9 @@ assert parse_probability("Probability: 0.2 ... final Probability: 0.25") == 0.25
 assert parse_probability("Probability: ~0.35") == 0.35
 assert parse_probability("I cannot say.") is None
 assert parse_joint("Q1: 0.1\nQ2: 20%\nQ3: 0.7", 3) == [0.1, 0.2, 0.7]
+assert abs(parse_probability("Probability: 11/36") - 11 / 36) < 1e-9
+assert parse_probability("Probability = 9/36 = 0.25") == 0.25
+assert parse_joint("Q1: 1/4\nQ2: 13/18 (72.22%)", 2) == [0.25, 13 / 18]
 
 
 def isolated_prompt(qid: str) -> str:
