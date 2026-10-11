@@ -111,3 +111,14 @@ def test_load_m5_weekly(tmp_path):
     assert s.demand.min() > 20 and np.all(s.price == 2.5)
     assert any(e.startswith("Sporting event: SuperBowl") for e in s.events[1])
     assert any(e.startswith("SNAP benefit days") for e in s.events[0])
+
+
+def test_load_m5_mirror_format_without_id_and_d_columns(tmp_path):
+    """The Nixtla mirror drops the sales `id` column and the calendar `d` column."""
+    _fake_m5(tmp_path)
+    sub = tmp_path / "m5" / "datasets"
+    pd.read_csv(sub / "sales_train_evaluation.csv").drop(columns=["id"]).to_csv(
+        sub / "sales_train_evaluation.csv", index=False)
+    pd.read_csv(sub / "calendar.csv").drop(columns=["d"]).to_csv(sub / "calendar.csv", index=False)
+    ds = load_m5(tmp_path, n_series=10, min_weekly_mean=20, min_weeks=100, holdout_weeks=0)
+    assert len(ds.series) == 3 and ds.series[0].sku_id == "FOODS_1_000_CA_1"

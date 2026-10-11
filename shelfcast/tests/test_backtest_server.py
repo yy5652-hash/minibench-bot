@@ -52,14 +52,16 @@ def test_backtest_calibration_uses_only_past_weeks(backtest_result):
             assert r["agent_cal"] == r["agent"]
 
 
-def test_evidence_in_the_brief_beats_baseline_in_event_weeks(synthetic):
-    from tests.conftest import evidence_responder
-
-    agent = ForecastAgent(FakeLLM(evidence_responder), n_samples=1)
+def test_noise_adjusted_evidence_beats_baseline_in_event_weeks(synthetic):
+    """The uplift rule reads only the brief's noise-adjusted effects; they must carry signal."""
+    agent = ForecastAgent(None)
     res = asyncio.run(run_backtest(synthetic, agent, BacktestConfig(n_origins=52, n_samples=1)))
     ev = res["segments"]["event_weeks"]
-    assert ev["agent"]["scaled_pinball"] < 0.9 * ev["baseline"]["scaled_pinball"]
-    assert ev["agent_cal"]["total_cost"] < ev["baseline"]["total_cost"]
+    assert ev["rule"]["scaled_pinball"] < 0.97 * ev["baseline"]["scaled_pinball"]
+    assert ev["rule"]["total_cost"] < ev["baseline"]["total_cost"]
+    # and it must not damage ordinary weeks
+    od = res["segments"]["ordinary_weeks"]
+    assert od["rule"]["scaled_pinball"] < 1.02 * od["baseline"]["scaled_pinball"]
 
 
 def test_markdown_reports(backtest_result):

@@ -176,6 +176,12 @@ python -m shelfcast serve [--mode live|replay] [--port 8080]
 
 ## Design notes and limits
 
+* One SKU's weekly sales are noisy, and on real Walmart data a past "holiday effect" seen two or
+  three times mostly fails to repeat. So every effect is shrunk toward no change unless it clears the
+  SKU's own week-to-week noise (a positive-part James-Stein weight), and where a pooled series exists
+  (all items of the department in that store) the effect is measured there instead, where it is far
+  less noisy. Without this, a mechanical uplift rule was 24% worse than the plain baseline on M5;
+  with it, the rule is level with the baseline on M5 and still better on event weeks in the synthetic store.
 * Effects are measured as **actual ÷ what the baseline predicted at the time**, not against "nearby
   weeks". That is the multiplier the agent applies, and it stays honest when the baseline has
   already caught up with a multi-week season. An event that overlapped a promotion is shown but kept

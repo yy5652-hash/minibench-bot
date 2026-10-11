@@ -39,10 +39,18 @@ class Series:
     demand: np.ndarray
     price: np.ndarray
     events: list[list[str]]
+    # Optional pooled series this SKU belongs to (for example all items of its department in
+    # its store): far less noisy than one SKU, so event effects can be measured on it.
+    group: str = ""
+    group_demand: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         self.demand = np.asarray(self.demand, dtype=float)
         self.price = np.asarray(self.price, dtype=float)
+        if self.group_demand is not None:
+            self.group_demand = np.asarray(self.group_demand, dtype=float)
+            if len(self.group_demand) != len(self.week_starts):
+                raise ValueError(f"{self.sku_id}: group_demand differs in length")
         n = len(self.week_starts)
         if not (len(self.demand) == len(self.price) == len(self.events) == n):
             raise ValueError(f"{self.sku_id}: week_starts, demand, price and events differ in length")
@@ -66,6 +74,9 @@ class Series:
             "demand": [None if math.isnan(v) else round(float(v), 4) for v in self.demand],
             "price": [None if math.isnan(v) else round(float(v), 4) for v in self.price],
             "events": self.events,
+            "group": self.group,
+            "group_demand": None if self.group_demand is None else [
+                None if math.isnan(v) else round(float(v), 2) for v in self.group_demand],
         }
 
     @classmethod
@@ -79,6 +90,9 @@ class Series:
             demand=np.array([np.nan if v is None else v for v in d["demand"]], dtype=float),
             price=np.array([np.nan if v is None else v for v in d["price"]], dtype=float),
             events=[list(e) for e in d["events"]],
+            group=d.get("group", ""),
+            group_demand=None if d.get("group_demand") is None else np.array(
+                [np.nan if v is None else v for v in d["group_demand"]], dtype=float),
         )
 
 
@@ -416,6 +430,8 @@ def load_m5(
     if "d" not in cal.columns:  # some mirrors drop it; rows are consecutive days from d_1
         cal["d"] = [f"d_{i + 1}" for i in range(len(cal))]
     sales = pd.read_csv(files["sales_train_evaluation.csv"])
+    if "id" not in sales.columns:  # the Nixtla mirror has no id column; Kaggle's is item_store_evaluation
+        sales = pd.concat([sales, (sales["item_id"] + "_" + sales["store_id"]).rename("id")], axis=1)
     d_cols = [c for c in sales.columns if c.startswith("d_")]
     cal = cal.set_index("d").loc[d_cols].reset_index()
 
@@ -474,6 +490,11 @@ def load_m5(
         for key, g in prices.groupby(["item_id", "store_id"])
     }
 
+    # Department-by-store totals over every item, the pooled series for event effects.
+    group_keys = (sales["dept_id"].astype(str) + "@" + sales["store_id"].astype(str)).to_numpy()
+    group_total = {g: weekly_all[group_keys == g].sum(axis=0) for g in set(group_keys[picks])}
+    group_size = {g: int((group_keys == g).sum()) for g in group_total}
+
     series: list[Series] = []
     for r in picks:
         meta = sales.loc[r]
@@ -497,6 +518,8 @@ def load_m5(
                 demand=row[first:],
                 price=np.array([pm.get(w, np.nan) for w in week_ids[first:]], dtype=float),
                 events=evs,
+                group=f"all {group_size[group_keys[r]]} items of {meta['dept_id']} in store {meta['store_id']}",
+                group_demand=group_total[group_keys[r]][first:],
             )
         )
     return Dataset(

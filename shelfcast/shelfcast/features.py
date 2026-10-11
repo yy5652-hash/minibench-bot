@@ -46,6 +46,7 @@ class Context:
     stats: dict
     baseline: BaselineForecast
     notes: str | None = None
+    group: str = ""
     history: np.ndarray = field(default_factory=lambda: np.array([]))
 
     @property
@@ -59,17 +60,60 @@ def _keys(events: list[str]) -> list[str]:
     return [k for k in (event_key(e) for e in events) if k != "SNAP"]
 
 
-def _vs_baseline(series: Series, j: int) -> float | None:
-    """Actual units in week ``j`` over the baseline median forecast made just before it."""
-    cache = series.__dict__.setdefault("_baseline_median_cache", {})
+def _vs_baseline(series: Series, j: int, group: bool = False) -> float | None:
+    """Actual units in week ``j`` over the baseline median forecast made just before it.
+
+    With ``group`` the same ratio is taken on the SKU's pooled series.
+    """
+    cache = series.__dict__.setdefault("_group_median_cache" if group else "_baseline_median_cache", {})
+    demand = series.group_demand if group else series.demand
     if j not in cache:
-        hist = series.demand[:j]
+        hist = demand[:j]
         cache[j] = float(baseline_forecast(hist).quantiles[MID]) if np.sum(~np.isnan(hist)) >= 8 else None
     b = cache[j]
-    y = series.demand[j]
+    y = demand[j]
     if b is None or np.isnan(y):
         return None
-    return round(float(y) / max(b, 0.5), 2)
+    return round(float(y) / max(b, 0.5), 3 if group else 2)
+
+
+SHRINK = 2.0  # how many noise variances an effect must clear before it is believed
+
+
+def _noise_sd(series: Series, known_end: int, window: int = 52, group: bool = False) -> float:
+    """Spread of log(actual / baseline) over recent ordinary weeks: the series' normal noise."""
+    logs = []
+    for j in range(max(9, known_end - window), known_end):
+        if _keys(series.events[j]):
+            continue
+        r = _vs_baseline(series, j, group)
+        if r and r > 0:
+            logs.append(np.log(r))
+    if len(logs) < 8:
+        return 0.5
+    return float(np.clip(np.std(logs), 0.02 if group else 0.1, 1.5))
+
+
+def _estimate(rows: list[dict], noise_sd: float) -> tuple[float | None, int]:
+    """Best estimate of an effect after allowing for the SKU's own noise.
+
+    Mean of log ratios over the usable rows (clean ones when any exist), shrunk
+    toward no effect with a positive-part James-Stein weight
+    1 - SHRINK * (noise^2 / n) / effect^2, floored at zero. A large effect seen
+    twice survives almost intact; three sightings of x1.2 on a product that
+    swings 50% week to week shrink to nothing.
+    """
+    clean = [r["vs_baseline"] for r in rows if r["vs_baseline"] and not r["also"]]
+    every = [r["vs_baseline"] for r in rows if r["vs_baseline"]]
+    use = clean or every
+    if not use:
+        return None, 0
+    n = len(use)
+    mean_log = float(np.mean(np.log(np.clip(use, 0.05, 20.0))))
+    if abs(mean_log) < 1e-9:
+        return 1.0, n
+    weight = max(0.0, 1.0 - SHRINK * (noise_sd**2 / n) / mean_log**2)
+    return round(float(np.exp(weight * mean_log)), 2), n
 
 
 def _median_effect(rows: list[dict]) -> tuple[float | None, bool]:
@@ -126,6 +170,22 @@ def build_context(
         next_keys = [k for k in dict.fromkeys(_keys(series.events[target_index + 1]))
                      if k != "Promotion" and k not in target_keys]
 
+    noise = _noise_sd(series, known_end)
+    pooled = series.group_demand is not None
+    group_noise = _noise_sd(series, known_end, group=True) if pooled else None
+
+    def with_group(entry: dict, weeks: list[int], also: list[list[str]]) -> dict:
+        """Prefer the effect measured on the pooled series: same event, far less noise."""
+        entry["item_estimate"] = entry["estimate"]
+        if pooled:
+            rows = [{"vs_baseline": _vs_baseline(series, j, group=True), "also": a} for j, a in zip(weeks, also)]
+            g_est, g_n = _estimate(rows, group_noise)
+            g_med, _ = _median_effect(rows)
+            entry.update(group_estimate=g_est, group_median=g_med, group_n=g_n)
+            if g_est is not None:
+                entry.update(estimate=g_est, n=g_n)
+        return entry
+
     event_history = []
     for k in target_keys:
         rows = []
@@ -136,8 +196,12 @@ def build_context(
                              "vs_baseline": _vs_baseline(series, j),
                              "also": [e for e in series.events[j] if event_key(e) not in (k, "SNAP")]})
         med, confounded = _median_effect(rows)
-        event_history.append({"event": k, "timing": "event week", "occurrences": rows[-4:],
-                              "median_vs_baseline": med, "confounded": confounded})
+        est, n = _estimate(rows, noise)
+        weeks = [j for j in range(known_end) if k in _keys(series.events[j])]
+        event_history.append(with_group(
+            {"event": k, "timing": "event week", "occurrences": rows[-4:],
+             "median_vs_baseline": med, "confounded": confounded, "estimate": est, "n": n},
+            weeks, [r["also"] for r in rows]))
     # Shoppers stock up ahead of some events. Only weeks with no event of their own measure that cleanly.
     for k in next_keys:
         rows = []
@@ -146,8 +210,13 @@ def build_context(
                 rows.append({"week": series.week_starts[j], "units": float(demand[j]),
                              "vs_baseline": _vs_baseline(series, j), "also": []})
         med, _ = _median_effect(rows)
-        event_history.append({"event": k, "timing": "week before the event", "occurrences": rows[-4:],
-                              "median_vs_baseline": med, "confounded": False})
+        est, n = _estimate(rows, noise)
+        weeks = [j for j in range(known_end - 1)
+                 if k in _keys(series.events[j + 1]) and not _keys(series.events[j])]
+        event_history.append(with_group(
+            {"event": k, "timing": "week before the event", "occurrences": rows[-4:],
+             "median_vs_baseline": med, "confounded": False, "estimate": est, "n": n},
+            weeks, [[] for _ in weeks]))
 
     promo_history = None
     promo_rows = []
@@ -164,8 +233,11 @@ def build_context(
     if promo_rows:
         med, confounded = _median_effect(promo_rows)
         after, _ = _median_effect(after_rows)
+        est, n = _estimate(promo_rows, noise)
+        after_est, after_n = _estimate(after_rows, noise)
         promo_history = {"count": len(promo_rows), "median_vs_baseline": med, "confounded": confounded,
-                         "week_after_vs_baseline": after, "recent": promo_rows[-5:]}
+                         "week_after_vs_baseline": after, "recent": promo_rows[-5:],
+                         "estimate": est, "n": n, "week_after_estimate": after_est, "week_after_n": after_n}
 
     prices = series.price[:known_end]
     ordinary_prices = [
@@ -190,6 +262,7 @@ def build_context(
         "mean_52": round(mean_52, 1),
         "trend_13_vs_prior_13_pct": None if not prev_13 else round(100 * (mean_13 / prev_13 - 1), 1),
         "cv_13": round(float(h[-13:].std() / mean_13), 2) if mean_13 > 0 else None,
+        "ordinary_week_noise_pct": round(100 * (float(np.exp(noise)) - 1)),
     }
 
     return Context(
@@ -211,6 +284,7 @@ def build_context(
         stats=stats,
         baseline=base,
         notes=notes,
+        group=series.group,
         history=hist,
     )
 
@@ -253,6 +327,9 @@ def render_context(ctx: Context) -> str:
         "",
         "In the evidence below, 'vs baseline' = actual units / what this same baseline predicted for that week.",
         "It is the multiplier that would have been right, so it maps directly onto median_multiplier.",
+        f"This product's ordinary weeks already swing about +/-{ctx.stats['ordinary_week_noise_pct']}% around the "
+        "baseline, so a past effect smaller than that, seen only a few times, is mostly noise. The",
+        "'noise-adjusted estimate' is the effect shrunk toward x1.0 for that noise and the number of sightings.",
         "",
         "HISTORY STATS: " + ", ".join(f"{k}={v}" for k, v in ctx.stats.items()),
         "",
@@ -278,7 +355,11 @@ def render_context(ctx: Context) -> str:
                 lines.append(f"  {label}: {why} in the history")
                 continue
             note = " (every occurrence overlapped another event or promotion)" if eh["confounded"] else ""
-            lines.append(f"  {label}: median {_fmt_ratio(eh['median_vs_baseline'])} vs baseline{note}")
+            lines.append(f"  {label}: this product median {_fmt_ratio(eh['median_vs_baseline'])} vs baseline{note}; "
+                         f"noise-adjusted {_fmt_ratio(eh['item_estimate'])}")
+            if eh.get("group_estimate") is not None:
+                lines.append(f"    pooled over {ctx.group}: median {_fmt_ratio(eh['group_median'])}, noise-adjusted "
+                             f"{_fmt_ratio(eh['group_estimate'])} from {eh['group_n']} occurrence(s)  <- more reliable")
             for o in eh["occurrences"]:
                 lines.append(f"    {o['week']}: {o['units']:,.0f} units, {_fmt_ratio(o['vs_baseline'])}{_also(o)}")
 
@@ -286,8 +367,9 @@ def render_context(ctx: Context) -> str:
         p = ctx.promo_history
         note = " (all overlapped holidays)" if p["confounded"] else ""
         lines += ["", f"PAST PROMOTIONS: {p['count']} total, median {_fmt_ratio(p['median_vs_baseline'])} vs "
-                      f"baseline{note}; the following ordinary week: median "
-                      f"{_fmt_ratio(p['week_after_vs_baseline'])}"]
+                      f"baseline{note}, noise-adjusted estimate {_fmt_ratio(p['estimate'])}; the following "
+                      f"ordinary week: median {_fmt_ratio(p['week_after_vs_baseline'])}, noise-adjusted "
+                      f"{_fmt_ratio(p['week_after_estimate'])}"]
         for r in p["recent"]:
             lines.append(f"  {r['week']} | {r['promotion']} | {r['units']:,.0f} units, "
                          f"{_fmt_ratio(r['vs_baseline'])}{_also(r)}")

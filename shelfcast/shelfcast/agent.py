@@ -39,7 +39,10 @@ Rules:
    partly absorbed it.
 3. An ordinary week with no driver gets a median_multiplier of 1.0. Most weeks are ordinary.
 4. Combine drivers multiplicatively, then shrink toward 1.0 when the evidence is thin
-   (one past occurrence, a discount never tried before, vague notes).
+   (one past occurrence, a discount never tried before, vague notes). One product's weekly sales are
+   noisy: trust the "noise-adjusted" figures over raw medians, and where a "pooled" line is given
+   (the whole department in that store) trust it over the single product. If the noise-adjusted
+   effect is x1.0, the honest multiplier is 1.0 unless the notes or the price say otherwise.
 5. Remember what lowers demand: store closures, the week after a promotion (pantry loading),
    price increases, a competitor promotion mentioned in the notes.
 6. The brief ends with a classical uplift model's suggestion. It multiplies past effects mechanically.
@@ -230,31 +233,26 @@ def apply_adjustment(base_q: np.ndarray, adj: Adjustment, levels: tuple[float, .
 def rule_adjustment(ctx: Context) -> Adjustment:
     """Classical uplift rule, no LLM: an ablation to measure what the model's judgment adds.
 
-    Multiplies the clean historical effects of the target week's events, its
-    promotion and a post-promotion dip, each shrunk toward 1 by n / (n + 1)
-    for n past occurrences.
+    Multiplies the noise-adjusted historical effects of the target week's
+    events, its promotion and a post-promotion dip (see features._estimate).
     """
     log_m = 0.0
     drivers = []
 
-    def add(name: str, ratio: float | None, n: int) -> None:
+    def add(name: str, estimate: float | None, n: int) -> None:
         nonlocal log_m
-        if ratio and n:
-            w = n / (n + 1)
-            log_m += w * float(np.log(ratio))
-            drivers.append({"name": name, "effect_pct": round(100 * (ratio**w - 1), 1),
-                            "evidence": f"median x{ratio} vs baseline over {n} past occurrence(s)"})
+        if estimate and n:
+            log_m += float(np.log(estimate))
+            drivers.append({"name": name, "effect_pct": round(100 * (estimate - 1), 1),
+                            "evidence": f"noise-adjusted x{estimate} vs baseline from {n} past occurrence(s)"})
 
     for eh in ctx.event_history:
-        usable = [o for o in eh["occurrences"] if o["vs_baseline"] is not None]
-        clean = [o for o in usable if not o["also"]]
-        add(f"{eh['event']} ({eh['timing']})", eh["median_vs_baseline"], len(clean) or len(usable))
+        add(f"{eh['event']} ({eh['timing']})", eh["estimate"], eh["n"])
     p = ctx.promo_history
     if p and any(e.startswith("Promotion") for e in ctx.target_events):
-        usable = [r for r in p["recent"] if r["vs_baseline"] is not None]
-        add("promotion", p["median_vs_baseline"], len([r for r in usable if not r["also"]]) or len(usable))
+        add("promotion", p["estimate"], p["n"])
     elif p and ctx.horizon == 1 and ctx.recent and any(e.startswith("Promotion") for e in ctx.recent[-1]["events"]):
-        add("week after a promotion", p["week_after_vs_baseline"], 2)
+        add("week after a promotion", p["week_after_estimate"], p["week_after_n"])
     m = float(np.clip(np.exp(log_m), *MULTIPLIER_RANGE))
     return Adjustment(m, 1.0, 1.0, "medium", drivers, "classical uplift rule")
 

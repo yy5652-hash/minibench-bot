@@ -235,7 +235,31 @@ def test_rule_adjustment_ablation(synthetic):
 
     s = synthetic.get("BAK-001")
     tg = rule_adjustment(build_context(s, s.week_starts.index("2025-11-24")))
-    assert tg.median_multiplier > 1.5 and tg.drivers[0]["name"].startswith("Holiday: Thanksgiving")
+    assert tg.median_multiplier > 1.3 and tg.drivers[0]["name"].startswith("Holiday: Thanksgiving")
     quiet = next(t for t in range(60, s.last_known_index())
                  if not s.events[t] and not s.events[t + 1] and not s.events[t - 1])
     assert rule_adjustment(build_context(s, quiet)).median_multiplier == 1.0
+
+
+def test_noise_adjustment_keeps_big_effects_and_drops_small_ones():
+    from shelfcast.features import _estimate
+
+    big = [{"vs_baseline": 2.6, "also": []}, {"vs_baseline": 3.0, "also": []}]
+    small = [{"vs_baseline": 1.2, "also": []}, {"vs_baseline": 1.15, "also": []}, {"vs_baseline": 1.25, "also": []}]
+    est, n = _estimate(big, noise_sd=0.3)
+    assert n == 2 and est > 2.4
+    assert _estimate(small, noise_sd=0.5) == (1.0, 3)
+    assert _estimate(small, noise_sd=0.03)[0] > 1.15  # the same effect on a quiet pooled series is believed
+    assert _estimate([], 0.3) == (None, 0)
+
+
+def test_pooled_series_overrides_noisy_item_effect(synthetic):
+    import copy
+
+    s = copy.deepcopy(synthetic.get("BAK-001"))
+    s.__dict__.pop("_baseline_median_cache", None)
+    s.group, s.group_demand = "all items of Baking", np.full(s.n_weeks, 1000.0)  # the department never moves
+    ctx = build_context(s, s.week_starts.index("2025-11-24"))
+    tg = next(e for e in ctx.event_history if e["event"] == "Holiday: Thanksgiving")
+    assert tg["item_estimate"] > 1.5 and tg["group_estimate"] == 1.0 and tg["estimate"] == 1.0
+    assert "pooled over all items of Baking" in render_context(ctx)
