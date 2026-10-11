@@ -2,7 +2,7 @@
 title: I tried to Dutch-book 13 LLM forecasters. Asked one question at a time, every one of them paid out.
 published: true
 tags: devchallenge, kagglechallenge, ai, machinelearning
-cover_image: (upload results/dutch_book_bench.png)
+cover_image: https://raw.githubusercontent.com/yy5652-hash/minibench-bot/claude/gifted-cori-docto2/kaggle_benchmark/results/dutch_book_bench.png
 ---
 
 *This is a submission for the [Kaggle Benchmarking Challenge](https://dev.to/challenges/kaggle-2026-09-23).*
@@ -46,7 +46,7 @@ Two things worth knowing if you build on Kaggle's proxy. First, it reserves each
 
 ## Findings
 
-![Isolated vs joint coherence per model, and where the bookie's profit comes from](results/dutch_book_bench.png)
+![Isolated vs joint coherence per model, and where the bookie's profit comes from](https://raw.githubusercontent.com/yy5652-hash/minibench-bot/claude/gifted-cori-docto2/kaggle_benchmark/results/dutch_book_bench.png)
 
 **1. Every model knows the rules of probability. It just doesn't apply them across separate calls.**
 On the 9 dice-and-card controls, all 13 models are essentially perfectly coherent (≤ 1¢ per family, Brier ≈ 0). Asked a whole family in one prompt, they are 95–100% arbitrage-free. Asked one statement per chat, they drop to **49–84%**. The problem is not ignorance; it is isolation, which is exactly how forecasting bots call these models.
