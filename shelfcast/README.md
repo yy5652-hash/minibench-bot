@@ -40,6 +40,21 @@ slow, inconsistent and rarely checked against what actually sold.
           order = demand quantile at  lost margin / (lost margin + leftover cost)   (newsvendor)
 ```
 
+**What each layer is for, and how we know.** We ran the ablations before writing this page.
+
+| Layer | What it adds | How it is measured |
+|---|---|---|
+| Calibrated baseline + newsvendor order | Orders the cost-optimal quantile instead of the point forecast | Real inventory cost on M5 (Walmart) |
+| Noise-adjusted event and promotion evidence | Moves the forecast only when a past effect clears the SKU's own noise | Event weeks vs ordinary weeks; an uplift rule with no LLM |
+| The LLM | Reads planner notes in free text, weighs overlapping or thin evidence, and explains the order | Weeks with a planner note: the baseline and the rule cannot read them |
+| The guard | Holds the baseline when there is no evidence and no note | Share of model proposals it blocks |
+
+An honest finding shaped this design: on anonymised Walmart items, where no promotion data exists, a
+language model that is free to adjust makes the forecast worse. It treats routine calendar entries as
+events and reads one past week as a pattern. So the model is not the forecaster here. It is the judgment
+layer on top of a statistical forecast, tied to evidence by a guard, and its own contribution is
+measured separately from everything else.
+
 The model behaves like a careful demand planner adjusting a system forecast: it starts from the
 baseline, names each driver with its evidence ("Thanksgiving: x2.7 vs baseline in both past
 years"), shrinks thin evidence toward no change, widens the uncertain side, and reads free-text
@@ -75,6 +90,11 @@ the weeks before it, then scored on accuracy and on money:
   lost sales against what actually sold, plus fill rate and stockout weeks.
 * **Ablation:** a classical uplift rule that multiplies the same evidence with no LLM. The gap
   between it and ShelfCast is what the model's judgment adds.
+* **Decision layer alone:** ordering the baseline's cost-optimal quantile against ordering its point
+  forecast, with no model involved.
+* **Planner-notes experiment:** a variant of the synthetic store where about 8% of weeks carry a
+  free-text note with no number in it ("supplier warns this week's delivery will be short"). Only the
+  model can read it, so that segment isolates the model's own contribution.
 * **Event weeks vs ordinary weeks**, reported separately.
 
 Two datasets:
@@ -99,6 +119,7 @@ Full reports written by the run:
 |---|---|
 | `results/backtest_m5-60.md` | real-data backtest: all weeks, event weeks, ordinary weeks, by category |
 | `results/backtest_synthetic-store.md` | the same on the synthetic store |
+| `results/backtest_synthetic-store-notes.md` | the planner-notes experiment |
 | `results/bench.md` | forecasts/min, output tokens/s, p50/p95 latency, $ per 1,000 forecasts |
 | `results/gpu_info.txt` | `amd-smi` / `rocm-smi` output from the serving host |
 

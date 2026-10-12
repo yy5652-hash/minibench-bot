@@ -60,6 +60,11 @@ def _keys(events: list[str]) -> list[str]:
     return [k for k in (event_key(e) for e in events) if k != "SNAP"]
 
 
+def _noted(series: Series, j: int) -> list[str]:
+    """A past week with a planner note had something else going on: it is not a clean measurement."""
+    return [f"planner note: {series.notes[j]}"] if series.notes and series.notes[j] else []
+
+
 def _vs_baseline(series: Series, j: int, group: bool = False) -> float | None:
     """Actual units in week ``j`` over the baseline median forecast made just before it.
 
@@ -84,7 +89,7 @@ def _noise_sd(series: Series, known_end: int, window: int = 52, group: bool = Fa
     """Spread of log(actual / baseline) over recent ordinary weeks: the series' normal noise."""
     logs = []
     for j in range(max(9, known_end - window), known_end):
-        if _keys(series.events[j]):
+        if _keys(series.events[j]) or _noted(series, j):
             continue
         r = _vs_baseline(series, j, group)
         if r and r > 0:
@@ -97,15 +102,16 @@ def _noise_sd(series: Series, known_end: int, window: int = 52, group: bool = Fa
 def _estimate(rows: list[dict], noise_sd: float) -> tuple[float | None, int]:
     """Best estimate of an effect after allowing for the SKU's own noise.
 
-    Mean of log ratios over the usable rows (clean ones when any exist), shrunk
+    Mean of log ratios over the clean rows only (a week that also had another event, a
+    promotion or a planner note measures something else; with no clean row there is no estimate
+    and the occurrences are still shown for the model to judge), shrunk
     toward no effect with a positive-part James-Stein weight
     1 - SHRINK * (noise^2 / n) / effect^2, floored at zero. A large effect seen
     twice survives almost intact; three sightings of x1.2 on a product that
     swings 50% week to week shrink to nothing.
     """
     clean = [r["vs_baseline"] for r in rows if r["vs_baseline"] and not r["also"]]
-    every = [r["vs_baseline"] for r in rows if r["vs_baseline"]]
-    use = clean or every
+    use = clean
     if not use:
         return None, 0
     n = len(use)
@@ -194,7 +200,8 @@ def build_context(
             if k in ks:
                 rows.append({"week": series.week_starts[j], "units": float(demand[j]),
                              "vs_baseline": _vs_baseline(series, j),
-                             "also": [e for e in series.events[j] if event_key(e) not in (k, "SNAP")]})
+                             "also": [e for e in series.events[j] if event_key(e) not in (k, "SNAP")]
+                             + _noted(series, j)})
         med, confounded = _median_effect(rows)
         est, n = _estimate(rows, noise)
         weeks = [j for j in range(known_end) if k in _keys(series.events[j])]
@@ -208,7 +215,7 @@ def build_context(
         for j in range(known_end - 1):
             if k in _keys(series.events[j + 1]) and not _keys(series.events[j]):
                 rows.append({"week": series.week_starts[j], "units": float(demand[j]),
-                             "vs_baseline": _vs_baseline(series, j), "also": []})
+                             "vs_baseline": _vs_baseline(series, j), "also": _noted(series, j)})
         med, _ = _median_effect(rows)
         est, n = _estimate(rows, noise)
         weeks = [j for j in range(known_end - 1)
@@ -216,7 +223,7 @@ def build_context(
         event_history.append(with_group(
             {"event": k, "timing": "week before the event", "occurrences": rows[-4:],
              "median_vs_baseline": med, "confounded": False, "estimate": est, "n": n},
-            weeks, [[] for _ in weeks]))
+            weeks, [_noted(series, j) for j in weeks]))
 
     promo_history = None
     promo_rows = []
@@ -227,9 +234,10 @@ def build_context(
             continue
         promo_rows.append({"week": series.week_starts[j], "promotion": promo, "units": float(demand[j]),
                            "vs_baseline": _vs_baseline(series, j),
-                           "also": [e for e in series.events[j] if event_key(e) not in ("Promotion", "SNAP")]})
+                           "also": [e for e in series.events[j] if event_key(e) not in ("Promotion", "SNAP")]
+                           + _noted(series, j)})
         if j + 1 < known_end and not _keys(series.events[j + 1]):
-            after_rows.append({"vs_baseline": _vs_baseline(series, j + 1), "also": []})
+            after_rows.append({"vs_baseline": _vs_baseline(series, j + 1), "also": _noted(series, j + 1)})
     if promo_rows:
         med, confounded = _median_effect(promo_rows)
         after, _ = _median_effect(after_rows)
