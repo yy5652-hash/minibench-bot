@@ -62,6 +62,9 @@ if [ "${SKIP_M5:-0}" != "1" ]; then
   python -m shelfcast backtest --dataset "$M5_DATA" --origins "$ORIGINS" --cache "$CACHE" --out-dir "$OUT"
 fi
 python -m shelfcast backtest --dataset data/synthetic-store.json --origins "$ORIGINS" --cache "$CACHE" --out-dir "$OUT"
+# The same store with free-text planner notes in some weeks: what only the model can read.
+[ -f data/synthetic-store-notes.json ] || python -m shelfcast data synthetic-notes --out data/synthetic-store-notes.json
+python -m shelfcast backtest --dataset data/synthetic-store-notes.json --origins "$ORIGINS" --cache "$CACHE" --out-dir "$OUT"
 
 if [ "${SMOKE:-0}" = "1" ]; then
   python -m shelfcast summary --out-dir "$OUT"

@@ -359,7 +359,7 @@ class ForecastAgent:
         async def one(s: Series, t: int) -> AgentForecast:
             nonlocal done
             async with sem:
-                r = await self.forecast(s, t)
+                r = await self.forecast(s, t, notes=(s.notes[t] or None) if s.notes else None)
             done += 1
             if progress:
                 progress(done, len(jobs), r)

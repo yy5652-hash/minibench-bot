@@ -83,6 +83,9 @@ def backtest_markdown(res: dict) -> str:
         "",
         *_table(res["segments"]["ordinary_weeks"]),
         "",
+        *(["## Weeks with a planner note (free text only the model can read)", "",
+           _headline(res["segments"]["noted_weeks"]), "", *_table(res["segments"]["noted_weeks"]), ""]
+          if "noted_weeks" in res["segments"] else []),
         "## By category",
         "",
         "| Category | Forecasts | FVA (pinball) | Inventory cost change |",

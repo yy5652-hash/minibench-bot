@@ -122,3 +122,16 @@ def test_load_m5_mirror_format_without_id_and_d_columns(tmp_path):
     pd.read_csv(sub / "calendar.csv").drop(columns=["d"]).to_csv(sub / "calendar.csv", index=False)
     ds = load_m5(tmp_path, n_series=10, min_weekly_mean=20, min_weeks=100, holdout_weeks=0)
     assert len(ds.series) == 3 and ds.series[0].sku_id == "FOODS_1_000_CA_1"
+
+
+def test_noted_shocks_leave_the_default_store_untouched(synthetic):
+    again = generate_synthetic()
+    assert again.series[0].notes is None
+    np.testing.assert_array_equal(np.nan_to_num(again.series[5].demand, nan=-1),
+                                  np.nan_to_num(synthetic.series[5].demand, nan=-1))
+    noted = generate_synthetic(noted_shock_rate=0.08)
+    assert noted.name == "synthetic-store-notes"
+    s = noted.series[0]
+    share = np.mean([bool(x) for s2 in noted.series for x in s2.notes])
+    assert 0.05 < share < 0.11 and len(s.notes) == s.n_weeks
+    assert not any(ch.isdigit() for s2 in noted.series for x in s2.notes for ch in x)  # no number given away

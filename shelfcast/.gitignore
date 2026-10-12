@@ -1,4 +1,6 @@
 .venv/
 data/*
 !data/synthetic-store.json
+!data/synthetic-store-notes.json
 *.log
+results/rehearsal*

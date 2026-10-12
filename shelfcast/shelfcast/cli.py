@@ -57,6 +57,8 @@ def _progress(every: int):
 def cmd_data(args) -> None:
     if args.kind == "synthetic":
         ds = generate_synthetic(seed=args.seed)
+    elif args.kind == "synthetic-notes":
+        ds = generate_synthetic(seed=args.seed, noted_shock_rate=0.08)
     else:
         download_m5(args.m5_dir)
         ds = load_m5(args.m5_dir, n_series=args.n_series, seed=args.seed)
@@ -175,7 +177,7 @@ def main(argv: list[str] | None = None) -> None:
         sp.add_argument("--out-dir", default="results")
 
     sp = sub.add_parser("data")
-    sp.add_argument("kind", choices=["synthetic", "m5"])
+    sp.add_argument("kind", choices=["synthetic", "synthetic-notes", "m5"])
     sp.add_argument("--m5-dir", default="data/m5")
     sp.add_argument("--n-series", type=int, default=60)
     sp.add_argument("--seed", type=int, default=7)

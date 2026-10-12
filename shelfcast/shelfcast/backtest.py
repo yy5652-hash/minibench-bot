@@ -128,6 +128,7 @@ async def run_backtest(dataset: Dataset, agent: ForecastAgent, cfg: BacktestConf
             "week": s.week_starts[t], "target_index": t,
             "actual": float(s.demand[t]), "scale": fc.scale, "price": price,
             "events": s.events[t],
+            "note": (s.notes[t] if s.notes else "") or "",
             "event_week": any(event_key(e) != "SNAP" for e in s.events[t]),
             "snaive": [round(float(x), 3) for x in sn.quantiles],
             "baseline": [round(float(x), 3) for x in fc.baseline.quantiles],
@@ -165,6 +166,8 @@ async def run_backtest(dataset: Dataset, agent: ForecastAgent, cfg: BacktestConf
         "event_weeks": _score([r for r in records if r["event_week"]], cfg),
         "ordinary_weeks": _score([r for r in records if not r["event_week"]], cfg),
     }
+    if any(r["note"] for r in records):
+        segments["noted_weeks"] = _score([r for r in records if r["note"]], cfg)
     by_category = {}
     for c in sorted({r["category"].split(" / ")[0] for r in records}):
         sub = [r for r in records if r["category"].split(" / ")[0] == c]
