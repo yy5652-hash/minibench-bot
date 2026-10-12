@@ -37,7 +37,9 @@ Rules:
    lifts, the same week last year, the price change.
 2. Do not double count. If recent weeks already show a trend or a seasonal ramp, the baseline has
    partly absorbed it.
-3. An ordinary week with no driver gets a median_multiplier of 1.0. Most weeks are ordinary.
+3. An ordinary week with no driver gets a median_multiplier of exactly 1.0 and both spreads of
+   exactly 1.0. Most weeks are ordinary. A single past week that happened to sell above or below the
+   baseline is not a driver; neither is a recent spike or dip with no named cause.
 4. Combine drivers multiplicatively, then shrink toward 1.0 when the evidence is thin
    (one past occurrence, a discount never tried before, vague notes). One product's weekly sales are
    noisy: trust the "noise-adjusted" figures over raw medians, and where a "pooled" line is given
@@ -49,9 +51,10 @@ Rules:
    Treat it as a starting point and correct it where judgment is needed: effects measured once,
    overlapping events, a discount deeper than any seen before, a season that the baseline has already
    caught up with, and anything in the planner notes, which it cannot read.
-7. Spreads: 1.0 keeps the baseline's uncertainty. Widen the side that is more uncertain
-   (upside for a promotion or event with variable lift, downside for supply or closure risk).
-   Go below 1.0 only with strong evidence of an unusually stable week.
+7. Spreads: the default is 1.0 for both, which keeps the baseline's measured uncertainty. Change a
+   spread only when you have moved the median for a named driver whose size is uncertain (upside for
+   a promotion or event, downside for a closure or supply risk). Never widen "to be safe": the
+   baseline's range is already calibrated on this product's own errors.
 8. Be calibrated: the final 5%-95% range should contain the actual outcome 90% of the time.
 
 Answer with JSON only, in this shape:
@@ -116,6 +119,8 @@ class AgentForecast:
     usage: dict = field(default_factory=dict)
     scale: float = 1.0
     context: Context | None = None
+    guarded: bool = False
+    proposed_multiplier: float | None = None
 
     def to_dict(self, include_context: bool = False) -> dict:
         adj = self.adjustment
@@ -142,6 +147,8 @@ class AgentForecast:
                 "analysis": adj.analysis,
             },
             "sample_multipliers": [round(s.median_multiplier, 3) for s in self.samples],
+            "guarded": self.guarded,
+            "proposed_multiplier": self.proposed_multiplier,
             "usage": self.usage,
             "scale": round(self.scale, 3),
         }
@@ -257,6 +264,33 @@ def rule_adjustment(ctx: Context) -> Adjustment:
     return Adjustment(m, 1.0, 1.0, "medium", drivers, "classical uplift rule")
 
 
+GUARD_BAND = 1.5  # how far the model may move from the statistical estimate without notes
+
+
+def guard(adj: Adjustment, ctx: Context) -> tuple[Adjustment, bool]:
+    """Keep the model's judgment tied to evidence.
+
+    With no planner notes, the model may refine the classical estimate but not
+    invent one: if that estimate is exactly 1.0 and the price has not moved 5%,
+    there is nothing to adjust for, so the baseline stands; otherwise the
+    multiplier stays within GUARD_BAND of the estimate. Notes lift the guard,
+    because they are the one thing only the model can read.
+    """
+    if ctx.notes:
+        return adj, False
+    rule = rule_adjustment(ctx).median_multiplier
+    price_moved = ctx.price_change_pct is not None and abs(ctx.price_change_pct) >= 5.0
+    if rule == 1.0 and not price_moved:
+        if adj.median_multiplier == 1.0 and adj.downside_spread == 1.0 and adj.upside_spread == 1.0:
+            return adj, False
+        return Adjustment(1.0, 1.0, 1.0, adj.confidence, adj.drivers, adj.analysis), True
+    lo, hi = rule / GUARD_BAND, rule * GUARD_BAND
+    if lo <= adj.median_multiplier <= hi:
+        return adj, False
+    m = float(np.clip(adj.median_multiplier, lo, hi))
+    return Adjustment(m, adj.downside_spread, adj.upside_spread, adj.confidence, adj.drivers, adj.analysis), True
+
+
 def render_rule(adj: Adjustment) -> str:
     lines = [f"CLASSICAL UPLIFT MODEL SUGGESTS: median_multiplier {adj.median_multiplier:.2f}"]
     if adj.drivers:
@@ -310,7 +344,8 @@ class ForecastAgent:
         if not samples:
             fc.error = "no parsable sample"
             return fc
-        fc.adjustment = combine(samples)
+        fc.proposed_multiplier = combine(samples).median_multiplier
+        fc.adjustment, fc.guarded = guard(combine(samples), ctx)
         fc.quantiles = apply_adjustment(base.quantiles, fc.adjustment)
         fc.llm_ok = True
         return fc

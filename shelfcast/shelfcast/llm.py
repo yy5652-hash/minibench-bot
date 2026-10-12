@@ -198,14 +198,24 @@ class OpenAICompatibleLLM:
             resp = await client.chat.completions.create(**kwargs)
         except (APIConnectionError, APITimeoutError) as e:
             raise LLMUnavailable(f"{c.base_url}: {e}") from e
+        texts = [strip_reasoning(ch.message.content or "") for ch in resp.choices]
+        usage = getattr(resp, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+        completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+        # Some OpenAI-compatible servers ignore `n` and return one choice: ask again for the rest.
+        while len(texts) < n and resp.choices:
+            kwargs["n"] = n - len(texts)
+            resp = await client.chat.completions.create(**kwargs)
+            texts += [strip_reasoning(ch.message.content or "") for ch in resp.choices]
+            usage = getattr(resp, "usage", None)
+            completion_tokens += getattr(usage, "completion_tokens", 0) or 0
         latency = time.perf_counter() - t0
 
-        usage = getattr(resp, "usage", None)
         out = Completion(
-            texts=[strip_reasoning(ch.message.content or "") for ch in resp.choices],
+            texts=texts[:n],
             model=getattr(resp, "model", c.model) or c.model,
-            prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
-            completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
             latency_s=round(latency, 3),
         )
         if self.cache is not None:

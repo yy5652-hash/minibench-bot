@@ -289,6 +289,12 @@ def build_context(
     )
 
 
+def _drivers(events: list[str]) -> list[str]:
+    """Events worth showing the model. Routine calendar items (SNAP benefit days fall in
+    nearly every week) are left out: shown as events, they get mistaken for drivers."""
+    return [e for e in events if event_key(e) != "SNAP"]
+
+
 def _fmt_units(v: float | None) -> str:
     return "n/a" if v is None else f"{v:,.0f}"
 
@@ -311,7 +317,7 @@ def render_context(ctx: Context) -> str:
         f"TARGET WEEK: {ctx.target_week} to {date.fromordinal(week_end).isoformat()} ({ahead})",
         "",
         "KNOWN PLAN FOR THE TARGET WEEK:",
-        "  events: " + ("; ".join(ctx.target_events) if ctx.target_events else "none"),
+        "  events: " + ("; ".join(_drivers(ctx.target_events)) or "none"),
     ]
     if ctx.target_price is not None:
         chg = "" if ctx.price_change_pct is None else f" ({ctx.price_change_pct:+.1f}% vs regular price {ctx.ref_price:.2f})"
@@ -337,14 +343,7 @@ def render_context(ctx: Context) -> str:
     ]
     for r in ctx.recent:
         price = "n/a" if r["price"] is None else f"{r['price']:.2f}"
-        lines.append(f"  {r['week']} | {_fmt_units(r['units'])} | {price} | {'; '.join(r['events']) or '-'}")
-
-    if ctx.last_year:
-        lines += ["", "SAME TIME LAST YEAR (week start | units | vs baseline | events):"]
-        for r in ctx.last_year:
-            tag = "  <- same week last year" if r["is_same_week"] else ""
-            lines.append(f"  {r['week']} | {_fmt_units(r['units'])} | {_fmt_ratio(r['vs_baseline'])} | "
-                         f"{'; '.join(r['events']) or '-'}{tag}")
+        lines.append(f"  {r['week']} | {_fmt_units(r['units'])} | {price} | {'; '.join(_drivers(r['events'])) or '-'}")
 
     if ctx.event_history:
         lines += ["", "PAST EFFECT OF THE EVENTS AROUND THE TARGET WEEK:"]

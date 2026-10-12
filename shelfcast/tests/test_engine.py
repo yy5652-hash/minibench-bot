@@ -263,3 +263,34 @@ def test_pooled_series_overrides_noisy_item_effect(synthetic):
     tg = next(e for e in ctx.event_history if e["event"] == "Holiday: Thanksgiving")
     assert tg["item_estimate"] > 1.5 and tg["group_estimate"] == 1.0 and tg["estimate"] == 1.0
     assert "pooled over all items of Baking" in render_context(ctx)
+
+
+def test_guard_ties_the_model_to_evidence(synthetic):
+    from shelfcast.agent import guard
+
+    s = synthetic.get("BAK-001")
+    quiet = next(t for t in range(60, s.last_known_index())
+                 if not s.events[t] and not s.events[t + 1] and not s.events[t - 1])
+    wild = Adjustment(1.6, 1.0, 1.8, "high", [], "")
+    held, changed = guard(wild, build_context(s, quiet))
+    assert changed and (held.median_multiplier, held.downside_spread, held.upside_spread) == (1.0, 1.0, 1.0)
+    # planner notes are the model's to read: the guard steps aside
+    free, changed = guard(wild, build_context(s, quiet, notes="store closed for two days"))
+    assert not changed and free.median_multiplier == 1.6
+    # with real evidence the model may refine it, within a band
+    tg = build_context(s, s.week_starts.index("2025-11-24"))
+    rule = rule_adjustment_value = __import__("shelfcast.agent", fromlist=["rule_adjustment"]).rule_adjustment(tg).median_multiplier
+    ok, changed = guard(Adjustment(rule * 1.2, 1.0, 1.4, "medium", [], ""), tg)
+    assert not changed and ok.upside_spread == 1.4
+    capped, changed = guard(Adjustment(rule * 5, 1.0, 1.0, "high", [], ""), tg)
+    assert changed and capped.median_multiplier == pytest.approx(rule * 1.5)
+
+
+def test_routine_snap_days_are_not_shown_as_events(synthetic):
+    import copy
+
+    s = copy.deepcopy(synthetic.get("PRO-001"))
+    t = s.last_known_index()
+    s.events[t] = ["SNAP benefit days: 6"]
+    text = render_context(build_context(s, t))
+    assert "events: none" in text and "SNAP" not in text

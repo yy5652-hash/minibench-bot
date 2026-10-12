@@ -55,11 +55,17 @@ def _jobs(dataset: Dataset, cfg: BacktestConfig):
     return jobs
 
 
-def _inventory(records: list[dict], key: str, cfg: BacktestConfig) -> dict:
+def _inventory(records: list[dict], key: str, cfg: BacktestConfig, at_median: bool = False) -> dict:
+    """Real cost of ordering from the forecast under ``key``.
+
+    ``at_median`` orders the point forecast instead of the cost-optimal quantile:
+    what a planner does with a single-number forecast.
+    """
+    mid = LEVELS.index(0.5)
     cost = lost = left = sold = demand = stockouts = 0.0
     for r in records:
         econ = Economics(r["price"], cfg.margin_pct, cfg.overage_pct)
-        order = order_quantity(np.array(r[key]), econ)
+        order = float(np.round(r[key][mid])) if at_median else order_quantity(np.array(r[key]), econ)
         y = r["actual"]
         cost += realized_cost(order, y, econ)
         lost += max(y - order, 0.0)
@@ -80,6 +86,14 @@ def _score(records: list[dict], cfg: BacktestConfig) -> dict:
     out = {}
     for m in METHODS:
         out[m] = {**summarize(records, m), **_inventory(records, m, cfg)}
+    # What the decision layer is worth on its own: ordering the baseline's cost-optimal
+    # quantile instead of its point forecast. No language model involved.
+    if records:
+        point = _inventory(records, "baseline", cfg, at_median=True)
+        out["order_point_forecast"] = point
+        if point["total_cost"]:
+            out["newsvendor_saving_pct"] = round(
+                100 * (1 - out["baseline_cal"]["total_cost"] / point["total_cost"]), 2)
     # Like against like: the calibrated agent against the calibrated baseline and rule,
     # so calibration itself is never credited to the model. Raw-vs-raw is kept alongside.
     b, a, r = out["baseline_cal"], out["agent_cal"], out["rule_cal"]
@@ -127,6 +141,7 @@ async def run_backtest(dataset: Dataset, agent: ForecastAgent, cfg: BacktestConf
             "drivers": [] if adj is None else adj.drivers,
             "analysis": "" if adj is None else adj.analysis[:600],
             "sample_multipliers": [round(x.median_multiplier, 3) for x in fc.samples],
+            "guarded": fc.guarded, "proposed_multiplier": fc.proposed_multiplier,
             "usage": fc.usage,
         })
 

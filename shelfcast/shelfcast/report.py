@@ -42,6 +42,10 @@ def _headline(block: dict) -> str:
         parts.append(f"vs classical uplift rule **{block['fva_vs_rule_pct']:+.1f}%**")
     if "cost_saving_pct" in block:
         parts.append(f"inventory cost **{-block['cost_saving_pct']:+.1f}%** vs calibrated baseline")
+    if "newsvendor_saving_pct" in block:
+        parts.append(f"ordering the cost-optimal quantile instead of the point forecast: inventory cost "
+                     f"**{-block['newsvendor_saving_pct']:+.1f}%** (${block['order_point_forecast']['total_cost']:,.0f} "
+                     f"when ordering the point forecast)")
     return "; ".join(parts)
 
 

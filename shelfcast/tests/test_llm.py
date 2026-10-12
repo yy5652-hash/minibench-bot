@@ -39,7 +39,7 @@ def _mock_vllm(state: dict) -> FastAPI:
             state["fail_once"] = False
             return JSONResponse({"object": "error", "message": "boom", "type": "BadRequestError", "code": 400},
                                 status_code=400)
-        n = body.get("n", 1)
+        n = 1 if state.get("ignore_n") else body.get("n", 1)
         content = "<think>hmm</think>" + json.dumps(ANSWER)
         return {
             "id": "cmpl-1", "object": "chat.completion", "created": int(time.time()), "model": body["model"],
@@ -118,6 +118,13 @@ def test_unrelated_400_keeps_guided_json_on(mock_server):
     assert len(state["requests"]) == 1
 
 
+def test_client_tops_up_when_server_ignores_n(mock_server):
+    url, state = mock_server
+    state["ignore_n"] = True
+    comp = asyncio.run(OpenAICompatibleLLM(_cfg(url)).complete([{"role": "user", "content": "x"}], n=3))
+    assert len(comp.texts) == 3 and len(state["requests"]) == 3 and comp.completion_tokens == 360
+
+
 def test_unreachable_endpoint_is_reported():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -133,7 +140,9 @@ def test_agent_end_to_end_over_http(mock_server, synthetic):
     agent = ForecastAgent(OpenAICompatibleLLM(_cfg(url)), n_samples=3)
     s = synthetic.get("SNK-001")
     fc = asyncio.run(agent.forecast(s, s.last_known_index()))
-    assert fc.llm_ok and fc.adjustment.median_multiplier == 1.25 and fc.usage["prompt_tokens"] == 900
+    # The mock always answers x1.25, but this week has no driver, so the guard holds the baseline.
+    assert fc.llm_ok and fc.proposed_multiplier == 1.25 and fc.guarded
+    assert fc.adjustment.median_multiplier == 1.0 and fc.usage["prompt_tokens"] == 900
 
 
 def test_strip_reasoning():
