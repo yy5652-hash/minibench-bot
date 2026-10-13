@@ -36,9 +36,9 @@ on real sales (1:25-2:00) → the machine underneath (2:00-2:20) → one line, o
 | 5 | 0:40 | **Wow.** The teal bar rises beside the grey one. Cut to the order tile alone on black: the number counts once from 21 to **[41]**. One soft tone. | The agent's forecast becomes an order at the cost-optimal quantile. | Order [41], not 21. | "ShelfCast read the calendar. In both past Thanksgivings this product sold [2.7] times what that same forecast predicted. So it orders [41]." |
 | 6 | 1:00 | The drivers list, one row: "+[82]% Thanksgiving", with its evidence line. | Every adjustment names its driver and its evidence. | Every change has a reason. | "It tells you why. Each driver, with the evidence behind it." |
 | 7 | 1:10 | The notes box. The cursor types: "Store closed Monday for renovation". Cut to the order tile dropping to **[N]**. | Free-text planner notes change the plan; no statistical model can read them. | It reads what you know. | "And it listens. Tell it what the sales history can't know, and the plan changes." |
-| 8 | 1:25 | Black. One number lands: **[+X.X]%**. Small label under it. | Rolling backtest on real Walmart sales: forecast value add, calibrated agent vs calibrated baseline. | Real Walmart sales. 60 products. 26 weeks. | "Does it pay? We replayed half a year of real Walmart sales. Every week forecast only from the past." |
-| 9 | 1:38 | Same layout, next number: **[−Z.Z]%**. | Inventory cost: the real cost of leftovers and lost sales when ordering with each forecast. | Inventory cost, [−Z.Z]%. | "Leftovers and lost sales, counted against what actually sold: [Z] percent cheaper." |
-| 10 | 1:48 | Same layout, last number: **[+W.W]%**, label "vs a classical uplift model". | The ablation: what the model's judgment adds over a rule using the same evidence. | Judgment, measured. | "And against a classical model using the very same evidence, the judgment still adds [W] percent." |
+| 8 | 1:25 | Black. One number lands: **[−X.X]%**. Small label under it. | The decision layer on real Walmart sales (M5): ordering the cost-optimal quantile instead of the point forecast. No model involved. | Real Walmart sales. [N] products. [W] weeks. | "Does it pay? We replayed real Walmart sales, every week forecast only from the past. Ordering the right quantile instead of the forecast itself cuts inventory cost by [X] percent." |
+| 9 | 1:38 | Same layout, next number: **[−Z.Z]%**. | Planner-notes experiment (synthetic store): inventory cost in weeks where the planner left a free-text note. | It reads what you know. | "When a planner writes down what they know, in plain words and with no number, the order follows: [Z] percent cheaper in those weeks." |
+| 10 | 1:48 | Same layout, last number: **[+W.W]%**, label "accuracy over a model with no LLM". | The ablation: the same evidence and the same weeks, with and without the language model. | Judgment, measured. | "And against a classical model given the very same evidence, the judgment adds [W] percent. Only one of them can read." |
 | 11 | 2:00 | A terminal, full frame, dark: `amd-smi` showing one MI300X at load. Then one number on black: **[N] forecasts a minute**. | Inference on one AMD Instinct MI300X with vLLM on ROCm; throughput from the benchmark. | One AMD Instinct MI300X. | "All of it runs on one AMD Instinct MI300X. An open model, served by vLLM on ROCm. [N] forecasts a minute, at [$X] per thousand." |
 | 12 | 2:12 | One line on black. | Open weights on the retailer's own GPU: sales data never leaves. | Your model. Your GPU. Your data. | "Open weights, your own GPU. The sales data never leaves the building." |
 | 13 | 2:20 | The word **ShelfCast**, then the repo and demo URLs beneath it. Hold two seconds. Cut to black. | (Close.) | From forecast to the right order. | "ShelfCast. From forecast to the right order. On AMD." |
@@ -73,7 +73,19 @@ reusable pieces are the engines. Shortlist, by stars and licence:
 | `zz41354899/SwiftClip` | 44 | MIT | Storyboard-driven Remotion templates; small, and inherits the Remotion licence question. |
 | `calesthio/OpenMontage` | 66k | AGPL-3.0 | Agentic video production system. AGPL: do not vendor. |
 
-Plan: screen-record shots 3, 5-7 and 11 from the live dashboard and terminal (they must be real),
-and build only the type-on-black shots (1, 2, 4, 8-10, 12, 13) as Motion Canvas scenes adapted from
-`motion-canvas/examples`. Nothing is built yet: the number shots wait for the GPU results. When it is
-built, list here which example scenes were adapted and what was changed.
+Plan: screen-record shots 3, 5-7 and 11 from the live dashboard and terminal (they must be real).
+
+What was built, and why it differs from the shortlist: the type-on-black shots (1, 2, 4, 8-10, 12, 13)
+are rendered by `submission/build_video_cards.py`. Motion Canvas needs Node.js, which is not installed on
+the build machine, and these shots are a line of type or one number with a slow push-in, so the script
+uses plain HTML and CSS recorded with Playwright's Chromium (Apache-2.0) and encoded with ffmpeg through
+`imageio-ffmpeg` (BSD-2-Clause). Nothing was vendored from another repository. It reuses the deck's
+palette and type, takes every number from `results/`, and skips a number shot when its result is
+missing rather than render a placeholder.
+
+    pip install playwright imageio-ffmpeg && playwright install chromium
+    python submission/build_video_cards.py --results results --out submission/video
+
+Shots 8-10 changed after the rehearsal with the real model: on anonymised Walmart items the model adds
+nothing over the baseline, so shot 8 now shows the decision layer on real sales, and shots 9-10 show the
+planner-notes experiment, where the model's own contribution is measured.

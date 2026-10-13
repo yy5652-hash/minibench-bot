@@ -4,3 +4,5 @@ data/*
 !data/synthetic-store-notes.json
 *.log
 results/rehearsal*
+
+submission/video/
