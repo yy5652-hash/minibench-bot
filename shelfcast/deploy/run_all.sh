@@ -77,6 +77,7 @@ python -m shelfcast warm --dataset data/synthetic-store.json --cache "$CACHE"
 
 echo "== filling the README results section"
 python -m shelfcast summary --out-dir "$OUT" --readme README.md
+python submission/build_deck.py --results "$OUT" --out submission/deck || echo "!! deck not built (rerun: python submission/build_deck.py)"
 
 echo "== dashboard on port $PORT"
 exec python -m shelfcast serve --dataset data/synthetic-store.json --mode live --port "$PORT" --cache "$CACHE" --out-dir "$OUT"
