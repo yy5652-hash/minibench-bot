@@ -6,7 +6,7 @@ on:
       mode:
         description: Tournament to inspect
         type: choice
-        options: [minibench, test_questions]
+        options: [minibench, tournament, test_questions]
         default: minibench
       inventory_only:
         description: Only list open questions; no model calls
