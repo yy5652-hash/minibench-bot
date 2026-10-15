@@ -45,11 +45,13 @@ class _Pacer:
             raise GeminiQuotaError(
                 f"Gemini request cap for this run reached ({cap}); quota left for later runs.")
         interval = float(os.getenv("GEMINI_MIN_INTERVAL_SECONDS", "4.6"))  # ~13/min of 15
-        delay = self.last + interval - time.monotonic()
-        if delay > 0:
-            await asyncio.sleep(delay)
-        self.last = time.monotonic()
-        self.requests += 1
+        # The bot runs its predictions concurrently; queue them so they cannot burst.
+        async with self.lock:
+            delay = self.last + interval - time.monotonic()
+            if delay > 0:
+                await asyncio.sleep(delay)
+            self.last = time.monotonic()
+            self.requests += 1
 
 
 PACER = _Pacer()
