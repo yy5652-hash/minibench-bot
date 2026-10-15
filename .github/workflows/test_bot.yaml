@@ -17,8 +17,6 @@ on:
         type: choice
         options: ["1", "3", "10", "0"]
         default: "1"
-  push:
-    branches: [codex/repair-minibench]
 
 permissions:
   contents: read
@@ -58,7 +56,7 @@ jobs:
         run: poetry install --only main --no-interaction --no-root
       - name: Run bot
         run: |
-          args=(--mode "$BOT_MODE" --limit "$BOT_LIMIT")
+          args=(--mode "$BOT_MODE" --limit "$BOT_LIMIT" --predictions "$BOT_PREDICTIONS")
           if [ "$INVENTORY_ONLY" = "true" ]; then args+=(--inventory-only); fi
           poetry run python main.py "${args[@]}"
         # this reads the environment variables from the github repository.
@@ -66,10 +64,14 @@ jobs:
         env:
           BOT_MODE: ${{ inputs.mode || 'minibench' }}
           BOT_LIMIT: ${{ inputs.limit || '1' }}
-          INVENTORY_ONLY: ${{ github.event_name == 'push' || inputs.inventory_only }}
-          FORECAST_MODEL: ${{ vars.FORECAST_MODEL }}
-          RESEARCH_MODEL: ${{ vars.RESEARCH_MODEL }}
-          PARSER_MODEL: ${{ vars.PARSER_MODEL }}
+          BOT_PREDICTIONS: ${{ vars.PREDICTIONS_PER_QUESTION || '5' }}
+          INVENTORY_ONLY: ${{ inputs.inventory_only }}
+          # Free Gemini tier by default; set repository variables to override.
+          FORECAST_MODEL: ${{ vars.FORECAST_MODEL || 'gemini/gemini-3.5-flash-lite' }}
+          RESEARCH_MODEL: ${{ vars.RESEARCH_MODEL || 'gemini/gemini-3.5-flash-lite' }}
+          PARSER_MODEL: ${{ vars.PARSER_MODEL || 'gemini/gemini-3.5-flash-lite' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MAX_REQUESTS_PER_RUN: ${{ vars.GEMINI_MAX_REQUESTS_PER_RUN || '200' }}
           METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }} # replace this with the name of the variable under which you stored your own Metaculus token
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}

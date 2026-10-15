@@ -23,6 +23,25 @@ Metaculus proxy models. Do not choose a model until its access is confirmed.
 The official template links the current participation/credits form:
 https://github.com/Metaculus/metac-bot-template#readme
 
+### Free Gemini tier (current default)
+
+Metaculus declined this season's credit grant, so the workflows default to
+`gemini/gemini-3.5-flash-lite` for all three roles, using the `GEMINI_API_KEY`
+secret (free tier: 15 requests/min, 500/day per Google project). Repository
+variables `FORECAST_MODEL`, `RESEARCH_MODEL`, `PARSER_MODEL` override it.
+
+`gemini_llm.py` calls the Gemini REST API directly, with the key in a header
+(LiteLLM puts it in failed-request URLs). All Gemini calls in a run share one
+pacer: at most one request every 4.6 s (`GEMINI_MIN_INTERVAL_SECONDS`) and at
+most `GEMINI_MAX_REQUESTS_PER_RUN` (200) per run. A daily-quota 429 stops the batch.
+
+Google Search grounding has no free allowance on this account (every model
+returns 429), so research uses Google News RSS headlines plus Gemini's
+`url_context` tool on pages named in the question. It refuses to forecast when
+neither yields a source. Each question costs about 2 research requests plus
+3 per prediction (forecast + 2 parser checks): 17 at the default 5 predictions.
+Set the variable `PREDICTIONS_PER_QUESTION` lower to stretch the daily quota.
+
 ### Existing local model service
 
 For local execution, `.env` can select the existing authenticated Responses
@@ -47,7 +66,7 @@ provider credentials. Keep the local gateway private.
 
 `Diagnose and Preview Bot` defaults to an inventory-only run: it reads current
 open MiniBench questions and saves `inventory.json`, with no model calls and no
-forecast submission. The repair branch push also runs this same diagnostic.
+forecast submission. Choose `test_questions` to forecast on the bot-testing-area tournament.
 Set `inventory_only=false` and `limit=1` for a one-question forecast preview after
 configuring model access. Inspect the resulting artifact before a full run.
 

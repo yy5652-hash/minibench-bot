@@ -40,13 +40,16 @@ jobs:
         run: poetry install --only main --no-interaction --no-root
       - name: Run bot
         run: |
-          poetry run python main.py --mode tournament --publish
+          poetry run python main.py --mode tournament --publish --predictions "${{ vars.PREDICTIONS_PER_QUESTION || '5' }}"
         # this reads the environment variables from the github repository.
         # Store under Settings --> Secrets and variables --> Actions
         env:
-          FORECAST_MODEL: ${{ vars.FORECAST_MODEL }}
-          RESEARCH_MODEL: ${{ vars.RESEARCH_MODEL }}
-          PARSER_MODEL: ${{ vars.PARSER_MODEL }}
+          # Free Gemini tier by default; set repository variables to override.
+          FORECAST_MODEL: ${{ vars.FORECAST_MODEL || 'gemini/gemini-3.5-flash-lite' }}
+          RESEARCH_MODEL: ${{ vars.RESEARCH_MODEL || 'gemini/gemini-3.5-flash-lite' }}
+          PARSER_MODEL: ${{ vars.PARSER_MODEL || 'gemini/gemini-3.5-flash-lite' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MAX_REQUESTS_PER_RUN: ${{ vars.GEMINI_MAX_REQUESTS_PER_RUN || '200' }}
           METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }} # replace this with the name of the variable under which you stored your own Metaculus token
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}

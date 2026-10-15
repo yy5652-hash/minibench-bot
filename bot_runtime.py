@@ -9,6 +9,7 @@ from pathlib import Path
 from forecasting_tools import ApiFilter, ForecastReport, GeneralLlm, MetaculusClient
 
 from bot_helpers import _is_real_env, print_run_summary_banner
+from gemini_llm import PACER, GeminiLlm
 from local_responses import LocalResponsesLlm
 
 
@@ -31,6 +32,8 @@ def model_config() -> dict:
     def llm(name: str, *, search: bool = False) -> GeneralLlm:
         if local_base:
             return LocalResponsesLlm(name, local_base, search=search)
+        if name.startswith("gemini/"):
+            return GeminiLlm(name, search=search)
         # Do not send temperature to reasoning/search models that reject it.
         return GeneralLlm(model=name, timeout=180, allowed_tries=2)
 
@@ -74,7 +77,7 @@ async def run(bot_class, args) -> int:
     print(f"Authenticated bot ID: {bot_id}")
     provider_names = ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY",
                       "PERPLEXITY_API_KEY", "ASKNEWS_API_KEY", "ASKNEWS_CLIENT_ID",
-                      "ASKNEWS_SECRET", "EXA_API_KEY")
+                      "ASKNEWS_SECRET", "EXA_API_KEY", "GEMINI_API_KEY")
     print("Configured provider credentials (names only):", [n for n in provider_names if _is_real_env(n)])
     tournaments = {
         "minibench": ["minibench"],
@@ -139,13 +142,16 @@ async def run(bot_class, args) -> int:
             print(f"Failed {question.page_url}: {type(report).__name__}")
             # A batch-wide configuration error must not be retried on 60 questions.
             message = str(report).lower()
-            if any(s in message for s in ("allowance", "api key", "api_key", "quota", "authentication")):
+            if any(s in message for s in ("allowance", "api key", "api_key", "quota", "authentication", "gemini http 4")):
                 print("Provider access/credit failure: stopping this batch.")
                 break
     print_run_summary_banner(reports, args.publish)
     usage = {role: llm.usage_summary() for role, llm in bot._llms.items()
-             if isinstance(llm, LocalResponsesLlm)}
+             if isinstance(llm, (LocalResponsesLlm, GeminiLlm))}
+    if any(isinstance(llm, GeminiLlm) for llm in bot._llms.values()):
+        usage["gemini_requests_this_run"] = PACER.requests
+        print(f"Gemini requests this run: {PACER.requests}")
     if usage:
         (output / "model-usage.json").write_text(json.dumps(usage, indent=2), encoding="utf-8")
-        print("Local model usage saved; dollar cost is unavailable, not zero.")
+        print("Model usage saved to model-usage.json.")
     return 1 if any(isinstance(r, BaseException) for r in reports) else 0
