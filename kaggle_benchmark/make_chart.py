@@ -1,6 +1,8 @@
 """Render the write-up chart from a results cache (dbb_results.json written by the notebook).
 
-Usage: python kaggle_benchmark/make_chart.py kaggle_benchmark/results/dbb_results.json kaggle_benchmark/results/dutch_book_bench.png
+Usage: python kaggle_benchmark/make_chart.py kaggle_benchmark/results/dbb_results.json kaggle_benchmark/results/dutch_book_bench.png [--only-added]
+
+--only-added draws just the models added after the challenge deadline (records with an "added" date).
 """
 
 import json
@@ -23,11 +25,10 @@ def short(name: str) -> str:
     return name.split("/", 1)[-1].replace("@default", "").replace("@20251001", "").replace("@20251101", "")
 
 
-def main(src: str, dst: str) -> None:
+def main(src: str, dst: str, only_added: bool = False) -> None:
     payload = json.load(open(src))
-    fam = pd.concat(
-        [pd.DataFrame(r["families"]).assign(model=m) for m, r in payload["results"].items()], ignore_index=True
-    )
+    runs = {m: r for m, r in payload["results"].items() if not only_added or r.get("added")}
+    fam = pd.concat([pd.DataFrame(r["families"]).assign(model=m) for m, r in runs.items()], ignore_index=True)
     iso, jnt = fam[fam["mode"] == "isolated"], fam[fam["mode"] == "joint"]
     rate = lambda s: 100 * s[s.parsed].arbitrage_free.mean()  # noqa: E731
     score = iso.groupby("model").apply(rate).sort_values()
@@ -75,7 +76,12 @@ def main(src: str, dst: str) -> None:
     cb.outline.set_visible(False)
     cb.ax.tick_params(colors=MUTED)
 
-    fig.suptitle("Dutch Book Bench: can a bookie with no information beat an LLM forecaster?", x=0.01, ha="left",
+    title = "Dutch Book Bench: can a bookie with no information beat an LLM forecaster?"
+    if only_added:
+        added = sorted({r["added"] for r in runs.values()})
+        span = added[0] if len(added) == 1 else f"{added[0]} to {added[-1]}"
+        title = f"Dutch Book Bench update: models added after the deadline ({span})"
+    fig.suptitle(title, x=0.01, ha="left",
                  fontsize=14, color=TEXT, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     fig.savefig(dst, dpi=170)
@@ -83,4 +89,4 @@ def main(src: str, dst: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], only_added="--only-added" in sys.argv[3:])

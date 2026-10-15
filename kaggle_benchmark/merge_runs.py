@@ -3,7 +3,9 @@
 Each run's raw replies are re-parsed and re-scored with the current parser in dutch_book_bench.py, so a parser
 fix applies without re-spending quota. Models already in the cache from a notebook session keep that run.
 
-Usage: python kaggle_benchmark/merge_runs.py kaggle_benchmark/results/dbb_results.json DIR/dutch-book-bench/3 [...]
+Usage: python kaggle_benchmark/merge_runs.py kaggle_benchmark/results/dbb_results.json DIR/dutch-book-bench/3 [...] [--added=YYYY-MM-DD]
+
+--added marks the new models as results added after the challenge deadline (shown separately in the post).
 """
 
 import glob
@@ -25,7 +27,7 @@ def load_benchmark() -> dict:
     return ns
 
 
-def main(cache: str, *sources: str) -> None:
+def main(cache: str, *sources: str, added: str | None = None) -> None:
     ns = load_benchmark()
     payload = json.load(open(cache))
     for path in sorted(p for src in sources for p in glob.glob(f"{src}/*/*/dutch_book_bench-run_id*.run.json")):
@@ -51,9 +53,12 @@ def main(cache: str, *sources: str) -> None:
         score = float(100 * fam_iso[fam_iso["parsed"]]["arbitrage_free"].mean())
         payload["results"][model] = dict(model=model, score=score, api_errors=0, families=families, raw_isolated={},
                                          source="batch", kaggle_score=100 * run["results"][0]["numericResult"]["value"])
+        if added:
+            payload["results"][model]["added"] = added
         print(f"{model}: {score:.1f} (Kaggle run reported {payload['results'][model]['kaggle_score']:.1f})")
     json.dump(payload, open(cache, "w"))
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:])
+    flags = dict(a[2:].split("=", 1) for a in sys.argv[1:] if a.startswith("--"))
+    main(*[a for a in sys.argv[1:] if not a.startswith("--")], added=flags.get("added"))
