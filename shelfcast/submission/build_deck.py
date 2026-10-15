@@ -216,7 +216,7 @@ def main() -> None:
     ap.add_argument("--results", default="results")
     ap.add_argument("--out", default="submission/deck")
     ap.add_argument("--screenshot", default="submission/dashboard.png")
-    ap.add_argument("--repo", default="github.com/yy5652-hash/minibench-bot (shelfcast/)")
+    ap.add_argument("--repo", default="github.com/yy5652-hash/shelfcast")
     ap.add_argument("--demo", default="demo URL: to be added")
     args = ap.parse_args()
     out = Path(args.out)

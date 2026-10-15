@@ -129,7 +129,7 @@ Full reports written by the run:
 2. On the droplet:
 
    ```bash
-   git clone <this repo> && cd <repo>/shelfcast
+   git clone https://github.com/yy5652-hash/shelfcast && cd shelfcast
    export SHELFCAST_LLM_API_KEY=$(openssl rand -hex 16)
    nohup bash deploy/serve_vllm.sh > vllm.log 2>&1 &     # downloads the model on first start
    bash deploy/run_all.sh                                 # benchmark, backtests, then the dashboard

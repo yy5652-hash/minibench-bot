@@ -111,7 +111,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--results", default="results")
     ap.add_argument("--out", default="submission/video")
-    ap.add_argument("--repo", default="github.com/yy5652-hash/minibench-bot")
+    ap.add_argument("--repo", default="github.com/yy5652-hash/shelfcast")
     ap.add_argument("--demo", default="")
     ap.add_argument("--only", type=int, nargs="*", help="shot numbers to render")
     args = ap.parse_args()
