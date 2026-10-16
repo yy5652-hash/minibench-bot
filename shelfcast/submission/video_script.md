@@ -22,7 +22,7 @@ Record the product shots live on the MI300X so the latency and "on the GPU" labe
 ## (b) Arc
 
 Quiet problem (0:00-0:20) → the system's blind spot made visible (0:20-0:40) → **wow: the order
-changes from 21 to 41** (0:40-1:00) → proof it reads what a person knows (1:00-1:25) → proof it pays,
+changes from 21 to 40** (0:40-1:00) → proof it reads what a person knows (1:00-1:25) → proof it pays,
 on real sales (1:25-2:00) → the machine underneath (2:00-2:20) → one line, out (2:20-2:30).
 
 ## (c) Shots
@@ -33,13 +33,13 @@ on real sales (1:25-2:00) → the machine underneath (2:00-2:20) → one line, o
 | 2 | 0:08 | The same line. Two short words appear beneath it, left and right: "Too few." "Too many." | None: the stakes. | Empty shelf. Or waste. | "Too few is an empty shelf. Too many is waste." |
 | 3 | 0:20 | The sales chart alone: 26 weeks of Canned Pumpkin, then the grey baseline bar for Thanksgiving week. Slow push-in on the grey bar. | The statistical baseline: what replenishment systems forecast today. | The system forecast: 21. | "This is what a replenishment system sees. It extrapolates last month. It has no idea next week is Thanksgiving." |
 | 4 | 0:36 | Hold on the grey bar. Music drops out. One beat of silence. | (Setup for the wow.) | (none) | (silence) |
-| 5 | 0:40 | **Wow.** The teal bar rises beside the grey one. Cut to the order tile alone on black: the number counts once from 21 to **[41]**. One soft tone. | The agent's forecast becomes an order at the cost-optimal quantile. | Order [41], not 21. | "ShelfCast read the calendar. In both past Thanksgivings this product sold [2.7] times what that same forecast predicted. So it orders [41]." |
-| 6 | 1:00 | The drivers list, one row: "+[82]% Thanksgiving", with its evidence line. | Every adjustment names its driver and its evidence. | Every change has a reason. | "It tells you why. Each driver, with the evidence behind it." |
-| 7 | 1:10 | The notes box. The cursor types: "Store closed Monday for renovation". Cut to the order tile dropping to **[N]**. | Free-text planner notes change the plan; no statistical model can read them. | It reads what you know. | "And it listens. Tell it what the sales history can't know, and the plan changes." |
-| 8 | 1:25 | Black. One number lands: **[−X.X]%**. Small label under it. | The decision layer on real Walmart sales (M5): ordering the cost-optimal quantile instead of the point forecast. No model involved. | Real Walmart sales. [N] products. [W] weeks. | "Does it pay? We replayed real Walmart sales, every week forecast only from the past. Ordering the right quantile instead of the forecast itself cuts inventory cost by [X] percent." |
-| 9 | 1:38 | Same layout, next number: **[−Z.Z]%**. | Planner-notes experiment (synthetic store): inventory cost in weeks where the planner left a free-text note. | It reads what you know. | "When a planner writes down what they know, in plain words and with no number, the order follows: [Z] percent cheaper in those weeks." |
-| 10 | 1:48 | Same layout, last number: **[+W.W]%**, label "accuracy over a model with no LLM". | The ablation: the same evidence and the same weeks, with and without the language model. | Judgment, measured. | "And against a classical model given the very same evidence, the judgment adds [W] percent. Only one of them can read." |
-| 11 | 2:00 | A terminal, full frame, dark: `amd-smi` showing one MI300X at load. Then one number on black: **[N] forecasts a minute**. | Inference on one AMD Instinct MI300X with vLLM on ROCm; throughput from the benchmark. | One AMD Instinct MI300X. | "All of it runs on one AMD Instinct MI300X. An open model, served by vLLM on ROCm. [N] forecasts a minute, at [$X] per thousand." |
+| 5 | 0:40 | **Wow.** The teal bar rises beside the grey one. Cut to the order tile alone on black: the number counts once from 21 to **40**. One soft tone. | The agent's forecast becomes an order at the cost-optimal quantile. | Order 40, not 21. | "ShelfCast read the calendar. In past Thanksgivings this product sold about eighty-five percent more than that same forecast predicted. So it orders forty." |
+| 6 | 1:00 | The drivers list, one row: "+85% Thanksgiving", with its evidence line. | Every adjustment names its driver and its evidence. | Every change has a reason. | "It tells you why. Each driver, with the evidence behind it." |
+| 7 | 1:10 | The notes box. The cursor types: "Store closed Monday for renovation". Cut to the order tile dropping from 40 to **35**. | Free-text planner notes change the plan; no statistical model can read them. | It reads what you know. | "And it listens. Tell it what the sales history can't know, and the plan changes." |
+| 8 | 1:25 | Black. One number lands: **−8.0%**. Small label under it. | The decision layer on real Walmart sales (M5): ordering the cost-optimal quantile instead of the point forecast. No model involved. | Real Walmart sales. 60 products. 26 weeks. | "Does it pay? We replayed real Walmart sales, every week forecast only from the past. Ordering the right quantile instead of the forecast itself cuts inventory cost by eight percent." |
+| 9 | 1:38 | Same layout, next number: **−21.9%**. | Planner-notes experiment (synthetic store): inventory cost in weeks where the planner left a free-text note. | It reads what you know. | "When a planner writes down what they know, in plain words and with no number, the order follows: twenty-two percent cheaper in those weeks." |
+| 10 | 1:48 | Same layout, last number: **+17.6%**, label "accuracy over a model with no LLM" (weeks with a note). | The ablation: the same evidence and the same weeks, with and without the language model. | Judgment, measured. | "And against a classical model given the very same evidence, the judgment adds eighteen percent in those weeks. Only one of them can read." |
+| 11 | 2:00 | A terminal, full frame, dark: `amd-smi` showing one MI300X at load. Then one number on black: **256 forecasts a minute**. | Inference on one AMD Instinct MI300X with vLLM on ROCm; throughput from the benchmark. | One AMD Instinct MI300X. | "All of it runs on one AMD Instinct MI300X. An open model, served by vLLM on ROCm. Two hundred fifty-six forecasts a minute, at under twenty cents per thousand." |
 | 12 | 2:12 | One line on black. | Open weights on the retailer's own GPU: sales data never leaves. | Your model. Your GPU. Your data. | "Open weights, your own GPU. The sales data never leaves the building." |
 | 13 | 2:20 | The word **ShelfCast**, then the repo and demo URLs beneath it. Hold two seconds. Cut to black. | (Close.) | From forecast to the right order. | "ShelfCast. From forecast to the right order. On AMD." |
 
@@ -48,7 +48,7 @@ on real sales (1:25-2:00) → the machine underneath (2:00-2:20) → one line, o
 1. **A useful work of art.** Every shot has exactly one subject; shots 8-10 are a single number each.
    One accent colour, one typeface, push-ins and hard cuts only. Nothing decorative.
 2. **It lands.** Calm open, a full beat of silence at 0:36, then the one moment the film is built
-   around: 21 becomes 41. Proof follows in three single-number shots; the close is one line.
+   around: 21 becomes 40. Proof follows in three single-number shots; the close is one line.
 3. **It explains the product.** A viewer leaves knowing: it forecasts demand and turns the forecast
    into an order (3-5), explains itself (6), takes a planner's notes (7), is measured on real sales
    and against a no-LLM model (8-10), and runs on one AMD GPU with open weights (11-12). The

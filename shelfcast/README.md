@@ -4,6 +4,9 @@
 
 AMD Developer Hackathon: ACT III · Track: **Reinvent Commerce** (demand and inventory planning)
 
+**Live demo:** https://yy5652-hash.github.io/shelfcast/ (every answer in it was produced by the model on
+one AMD Instinct MI300X; the page replays them and recomputes the order for any cost you set)
+
 ---
 
 > Track brief: "If your product predicts demand, sales, or customer behaviour, explain how the prediction
@@ -42,12 +45,12 @@ slow, inconsistent and rarely checked against what actually sold.
 
 **What each layer is for, and how we know.** We ran the ablations before writing this page.
 
-| Layer | What it adds | How it is measured |
-|---|---|---|
-| Calibrated baseline + newsvendor order | Orders the cost-optimal quantile instead of the point forecast | Real inventory cost on M5 (Walmart) |
-| Noise-adjusted event and promotion evidence | Moves the forecast only when a past effect clears the SKU's own noise | Event weeks vs ordinary weeks; an uplift rule with no LLM |
-| The LLM | Reads planner notes in free text, weighs overlapping or thin evidence, and explains the order | Weeks with a planner note: the baseline and the rule cannot read them |
-| The guard | Holds the baseline when there is no evidence and no note | Share of model proposals it blocks |
+| Layer | What it adds | How it is measured | Measured on the MI300X run |
+|---|---|---|---|
+| Calibrated baseline + newsvendor order | Orders the cost-optimal quantile instead of the point forecast | Real inventory cost on M5 (Walmart) | **−8.0%** inventory cost on real Walmart sales |
+| Noise-adjusted event and promotion evidence | Moves the forecast only when a past effect clears the SKU's own noise | Event weeks vs ordinary weeks; an uplift rule with no LLM | Synthetic store: **−8.9%** inventory cost, pinball **+4.0%** (event weeks +6.8%) |
+| The LLM | Reads planner notes in free text, weighs overlapping or thin evidence, and explains the order | Weeks with a planner note: the baseline and the rule cannot read them | Noted weeks: **−21.9%** inventory cost, pinball **+19.4%** vs baseline, **+17.6%** vs the no-LLM rule |
+| The guard | Holds the baseline when there is no evidence and no note | Share of model proposals it blocks | M5: blocked 92 of 389 proposed changes (24%); the model's net effect stays within 0.6% of the baseline |
 
 An honest finding shaped this design: on anonymised Walmart items, where no promotion data exists, a
 language model that is free to adjust makes the forecast worse. It treats routine calendar entries as
@@ -110,7 +113,48 @@ Two datasets:
 ### Results
 
 <!-- RESULTS:START -->
-No results yet: run `deploy/run_all.sh` on the GPU host. It fills this section from `results/`.
+**Real Walmart sales (M5)**: 1,560 one-week-ahead forecasts, 60 SKUs, 2015-11-21 to 2016-05-14; model `Qwen/Qwen3-30B-A3B-Instruct-2507`, 5 samples each, answered 1560/1560.
+
+| (all three calibrated on earlier weeks) | Statistical baseline | Uplift rule, no LLM | ShelfCast |
+|---|---:|---:|---:|
+| Scaled pinball loss ↓, all weeks | 0.1023 | 0.1027 | 0.1029 |
+| Scaled pinball loss ↓, event weeks | 0.1018 | 0.1030 | 0.1035 |
+| Scaled pinball loss ↓, ordinary weeks | 0.1028 | 0.1023 | 0.1022 |
+| 90% interval coverage (target 90%) | 90.6% | 90.3% | 90.1% |
+| Inventory cost ↓ (leftovers + lost margin) | $7,096 | $7,115 | $7,118 |
+| Fill rate | 91.6% | 92.0% | 92.1% |
+
+Forecast value add vs the calibrated baseline: **-0.6%** (event weeks -1.7%, ordinary weeks +0.6%); vs the uplift rule: **-0.2%**; inventory cost **+0.3%**.
+
+**Synthetic store**: 520 one-week-ahead forecasts, 20 SKUs, 2026-04-13 to 2026-10-05; model `Qwen/Qwen3-30B-A3B-Instruct-2507`, 5 samples each, answered 520/520.
+
+| (all three calibrated on earlier weeks) | Statistical baseline | Uplift rule, no LLM | ShelfCast |
+|---|---:|---:|---:|
+| Scaled pinball loss ↓, all weeks | 0.1145 | 0.1116 | 0.1099 |
+| Scaled pinball loss ↓, event weeks | 0.1472 | 0.1387 | 0.1372 |
+| Scaled pinball loss ↓, ordinary weeks | 0.0952 | 0.0957 | 0.0938 |
+| 90% interval coverage (target 90%) | 88.5% | 88.3% | 88.3% |
+| Inventory cost ↓ (leftovers + lost margin) | $16,804 | $15,591 | $15,314 |
+| Fill rate | 90.5% | 91.6% | 92.1% |
+
+Forecast value add vs the calibrated baseline: **+4.0%** (event weeks +6.8%, ordinary weeks +1.5%); vs the uplift rule: **+1.5%**; inventory cost **-8.9%**.
+
+**Synthetic store with planner notes**: 520 one-week-ahead forecasts, 20 SKUs, 2026-04-13 to 2026-10-05; model `Qwen/Qwen3-30B-A3B-Instruct-2507`, 5 samples each, answered 520/520.
+
+| (all three calibrated on earlier weeks) | Statistical baseline | Uplift rule, no LLM | ShelfCast |
+|---|---:|---:|---:|
+| Scaled pinball loss ↓, all weeks | 0.1106 | 0.1174 | 0.1103 |
+| Scaled pinball loss ↓, event weeks | 0.1347 | 0.1458 | 0.1372 |
+| Scaled pinball loss ↓, ordinary weeks | 0.0952 | 0.0992 | 0.0931 |
+| 90% interval coverage (target 90%) | 88.8% | 88.8% | 89.0% |
+| Inventory cost ↓ (leftovers + lost margin) | $15,017 | $13,970 | $13,211 |
+| Fill rate | 91.6% | 92.5% | 93.3% |
+
+Forecast value add vs the calibrated baseline: **+0.3%** (event weeks -1.9%, ordinary weeks +2.2%); vs the uplift rule: **+6.0%**; inventory cost **-12.0%**.
+
+In the weeks where the planner left a note: forecast value add **+19.4%**, vs the uplift rule **+17.6%**, inventory cost **-21.9%**.
+
+**Inference on one AMD Instinct MI300X** (`Qwen/Qwen3-30B-A3B-Instruct-2507`, vLLM, 5 samples per forecast): 256 forecasts/min at 128 concurrent requests, 4,722 output tokens/s, p95 latency 47.8s, $0.194 per 1,000 forecasts at $2.99/GPU-hour; 100.0% of samples parsed as valid JSON.
 <!-- RESULTS:END -->
 
 Full reports written by the run:
@@ -123,9 +167,14 @@ Full reports written by the run:
 | `results/bench.md` | forecasts/min, output tokens/s, p50/p95 latency, $ per 1,000 forecasts |
 | `results/gpu_info.txt` | `amd-smi` / `rocm-smi` output from the serving host |
 
-## Run it on AMD Developer Cloud
+## Run it on an MI300X
 
-1. Create a GPU droplet with **1× MI300X** and a ROCm image (the vLLM quick-start image works).
+The results above were produced on 16 Oct 2026 on one **AMD Instinct MI300X** VM from Hot Aisle (ROCm 7.2,
+the `rocm/vllm` container). The whole run, from boot to the last forecast, took about 35 minutes of GPU
+time, $1.49 at $2.99/hour. `results/amd_smi_under_load.txt` is `amd-smi` captured during the benchmark.
+Any MI300X host works, for example AMD Developer Cloud:
+
+1. Create a GPU VM with **1× MI300X** and a ROCm image (the vLLM quick-start image works).
 2. On the droplet:
 
    ```bash
@@ -154,7 +203,8 @@ python -m shelfcast serve --dataset data/synthetic-store.json --mode replay
 Replay mode serves the cached answers (all backtest weeks and the pre-run upcoming weeks) and falls
 back to the statistical baseline, clearly labelled, for anything never run. To keep a public demo URL
 up during judging, commit `results/` and deploy the included `Dockerfile` to any small CPU host, for
-example a Hugging Face Docker Space (it listens on port 7860).
+example a Hugging Face Docker Space (it listens on port 7860), or export a static copy with
+`python submission/build_static_demo.py --live` on the GPU host (that is how the live demo above was made).
 
 ## Develop locally (no GPU)
 
@@ -162,7 +212,7 @@ example a Hugging Face Docker Space (it listens on port 7860).
 cd shelfcast
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest                      # 46 tests; the model is replaced by fakes and a mock vLLM server
+pytest                      # 57 tests; the model is replaced by fakes and a mock vLLM server
 ```
 
 Point `SHELFCAST_LLM_BASE_URL` at any OpenAI-compatible endpoint to try the full loop.

@@ -1,0 +1,20 @@
+$ amd-smi static --asic --vram
+GPU: 0
+    ASIC:
+        MARKET_NAME: AMD Instinct MI300X VF
+        VENDOR_ID: 0x1002
+        VENDOR_NAME: Advanced Micro Devices Inc. [AMD/ATI]
+        SUBVENDOR_ID: 0x1002
+        DEVICE_ID: 0x74b5
+        SUBSYSTEM_ID: 0x74a1
+        REV_ID: 0x00
+        ASIC_SERIAL: 0x858A4298FF49744C
+        OAM_ID: 6
+        NUM_COMPUTE_UNITS: 304
+        TARGET_GRAPHICS_VERSION: gfx942
+    VRAM:
+        TYPE: HBM
+        VENDOR: MICRON
+        SIZE: 196288 MB
+        BIT_WIDTH: 2048
+        MAX_BANDWIDTH: 5325 GB/s

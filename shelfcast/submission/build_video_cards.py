@@ -1,4 +1,4 @@
-"""Render the type-on-black shots of the demo video (storyboard shots 1, 2, 4, 8-10, 12, 13).
+"""Render the type-on-black shots of the demo video (storyboard shots 1, 2, 4, 8-11, 12, 13).
 
     python submission/build_video_cards.py --results results --out submission/video
 
@@ -13,6 +13,7 @@ Needs: pip install playwright imageio-ffmpeg  (and `playwright install chromium`
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import subprocess
 import tempfile
@@ -35,6 +36,8 @@ html,body{{margin:0;width:1920px;height:1080px;background:#0f1216;overflow:hidde
 .small{{font-size:30px;color:#8c96a5;margin-top:16px;opacity:0;animation:rise .8s ease-out 1.9s both}}
 .caption{{position:absolute;left:96px;bottom:84px;font-size:34px;color:#8c96a5;opacity:0;animation:rise .8s ease-out 1.2s both}}
 .brand{{font-size:150px;font-weight:700;letter-spacing:-.03em;opacity:0;animation:rise .9s ease-out .4s both}}
+.term{{font:30px/1.35 Menlo,monospace;color:#c5ccd6;background:#0b0d10;padding:40px 48px;border-radius:12px;
+  opacity:0;animation:rise .6s ease-out .2s both;white-space:pre}}
 .url{{font-size:34px;color:#8c96a5;margin-top:34px;opacity:0;animation:rise .8s ease-out 1.6s both;text-align:center;line-height:1.5}}
 </style></head><body><div class="stage">{body}</div>{caption}</body></html>"""
 
@@ -77,10 +80,26 @@ def shots(results: Path, repo: str, demo: str) -> list[dict]:
         if nw.get("fva_vs_rule_pct") is not None:
             out.append(dict(n=10, dur=9, body=f'<div class="num">{signed(nw["fva_vs_rule_pct"])}</div>'
                                                '<div class="label">accuracy over a model with no LLM</div>'
-                                               '<div class="small">same evidence, same weeks; only one of them can read</div>',
+                                               '<div class="small">weeks with a planner note; same evidence, only one of them can read</div>',
                             caption="Judgment, measured."))
     else:
         print("skipped shots 9-10: no planner-notes backtest in the results folder")
+    bench = load("bench.json")
+    smi = results / "amd_smi_overview.txt"
+    if smi.exists():
+        rows = [l for l in smi.read_text().splitlines() if l.startswith(("|", "+"))][:10]
+        term = html.escape("\n".join(rows))
+        out.append(dict(n="11a", dur=5, body=f'<pre class="term">$ amd-smi\n{term}</pre>',
+                        caption="One AMD Instinct MI300X."))
+    if bench and bench.get("levels"):
+        best = max(bench["levels"], key=lambda r: r["forecasts_per_min"])
+        out.append(dict(n="11b", dur=7, body=f'<div class="num">{best["forecasts_per_min"]:,.0f}</div>'
+                                              '<div class="label">forecasts a minute on one AMD Instinct MI300X</div>'
+                                              f'<div class="small">${best["usd_per_1k_forecasts"]:.2f} per 1,000 forecasts · '
+                                              f'{bench["model"].split("/")[-1]} · vLLM on ROCm</div>',
+                        caption="One AMD Instinct MI300X."))
+    else:
+        print("skipped shot 11: no benchmark in the results folder")
     out += [
         dict(n=12, dur=8, body='<div class="line">Your model. Your GPU. Your data.</div>'),
         dict(n=13, dur=8, body='<div class="brand">ShelfCast</div>'
@@ -101,7 +120,7 @@ def render(shot: dict, out_dir: Path, browser, ffmpeg: str) -> Path:
         page.wait_for_timeout(int(shot["dur"] * 1000))
         ctx.close()
         webm = Path(page.video.path())
-        target = out_dir / f"shot_{shot['n']:02d}.mp4"
+        target = out_dir / f"shot_{str(shot['n']).zfill(2)}.mp4"
         subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(webm), "-t", str(shot["dur"]),
                         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", "-crf", "16", str(target)], check=True)
     return target
@@ -113,7 +132,7 @@ def main() -> None:
     ap.add_argument("--out", default="submission/video")
     ap.add_argument("--repo", default="github.com/yy5652-hash/shelfcast")
     ap.add_argument("--demo", default="")
-    ap.add_argument("--only", type=int, nargs="*", help="shot numbers to render")
+    ap.add_argument("--only", nargs="*", help="shot numbers to render (e.g. 8 11a)")
     args = ap.parse_args()
 
     import imageio_ffmpeg
@@ -121,7 +140,7 @@ def main() -> None:
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    todo = [s for s in shots(Path(args.results), args.repo, args.demo) if not args.only or s["n"] in args.only]
+    todo = [s for s in shots(Path(args.results), args.repo, args.demo) if not args.only or str(s["n"]) in args.only]
     with sync_playwright() as p:
         browser = p.chromium.launch()
         for s in todo:

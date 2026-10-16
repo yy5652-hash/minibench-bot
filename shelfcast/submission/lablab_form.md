@@ -1,6 +1,6 @@
 # lablab.ai submission form: ready-to-paste text
 
-Fill the `[...]` placeholders after the GPU run. Use only numbers that appear in `results/*.md`.
+Every number below is from the run on one AMD Instinct MI300X on 16 Oct 2026 (`results/*.md`).
 
 ## Project title
 
@@ -18,7 +18,7 @@ Reinvent Commerce: demand and inventory planning
 
 ## Technology tags
 
-AMD Instinct MI300X, AMD Developer Cloud, ROCm, vLLM, Qwen3, open-weight LLM, structured outputs,
+AMD Instinct MI300X, ROCm, vLLM, Qwen3, open-weight LLM, structured outputs,
 probabilistic forecasting, conformal calibration, newsvendor optimisation, FastAPI, Python
 
 ## Long description
@@ -47,12 +47,23 @@ forecast range next to the baseline's.
 **Evidence.** A rolling 26-week backtest on real Walmart sales (M5, 60 item-store series) and on a
 synthetic store scores every forecast on accuracy (pinball loss, interval coverage) and on money
 (the actual cost of leftovers and lost sales when ordering with each forecast). It includes an
-ablation: a classical uplift rule that uses the same evidence with no LLM.
-Results on real data: forecast value add [+X.X%] vs the statistical baseline, [+X.X%] in event weeks,
-inventory cost [−X.X%], 90% interval coverage [XX%], and [+X.X%] vs the classical uplift rule.
+ablation: a classical uplift rule that uses the same evidence with no LLM. All 2,600 backtest forecasts
+were answered by the model on the MI300X.
+
+- Real Walmart sales (1,560 forecasts): ordering the cost-optimal quantile instead of the point forecast
+  cuts inventory cost by 8.0%, with 90.1% of outcomes inside the 90% range. These items are anonymised and
+  carry no promotion data, and there the model's net effect is within 0.6% of the baseline: its guard
+  blocked 92 of 389 proposed changes. We report this rather than hide it; it is why the LLM is a judgment
+  layer on a statistical forecast, not the forecaster.
+- Planner notes (synthetic store, labelled as such): in weeks where a planner left a free-text note with
+  no number in it, ShelfCast's forecast is 19.4% better than the calibrated baseline and 17.6% better than
+  the no-LLM rule, and inventory cost is 21.9% lower. Only the model can read the note.
+- Synthetic store overall: inventory cost −8.9%, forecast value add +4.0% (+6.8% in event weeks).
 
 **Why AMD.** The MI300X's 192 GB of HBM3 holds a capable open model with ample KV cache, so hundreds
-of SKU forecasts run concurrently on one GPU: [N] forecasts per minute at [$X.XX] per 1,000 forecasts.
+of SKU forecasts run concurrently on one GPU: 256 forecasts per minute (5 samples each, 4,722 output
+tokens/s, 100% valid JSON) at $0.19 per 1,000 forecasts at $2.99 per GPU-hour. The whole run, from boot
+to the last forecast, cost $1.49 of GPU time.
 Prefix caching and n-sampling mean each brief is prefilled once for all 5 samples. The model is
 open-weight and runs on the retailer's own GPU, so sales data never leaves the company.
 
@@ -61,7 +72,8 @@ OpenAI-compatible endpoint, and planner feedback as training data.
 
 ## Links
 
-- GitHub: [public repo URL]
-- Demo: [dashboard URL: live on the MI300X during the event, replay host afterwards]
-- Video: [URL]
-- Slides: [URL]
+- GitHub: https://github.com/yy5652-hash/shelfcast
+- Demo: https://yy5652-hash.github.io/shelfcast/ (every answer recorded on the MI300X; orders recompute in
+  the browser for any margin and leftover cost)
+- Video: `submission/video/shelfcast_demo.mp4` (upload to the form)
+- Slides: `submission/deck.pdf` (upload to the form)

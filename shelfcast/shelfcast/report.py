@@ -151,7 +151,8 @@ def headline_markdown(backtests: list[dict], bench: dict | None) -> str:
     for bt in backtests:
         m, s, llm = bt["meta"], bt["summary"], bt["llm"]
         ev, od = bt["segments"]["event_weeks"], bt["segments"]["ordinary_weeks"]
-        label = "Synthetic store" if m["source"] == "synthetic" else "Real Walmart sales (M5)"
+        label = "Real Walmart sales (M5)" if m["source"] != "synthetic" else (
+            "Synthetic store with planner notes" if "noted_weeks" in bt["segments"] else "Synthetic store")
         lines += [
             f"**{label}**: {m['n_forecasts']:,} one-week-ahead forecasts, {m['n_series']} SKUs, "
             f"{m['weeks'][0]} to {m['weeks'][-1]}; model `{llm['model']}`, {llm['samples_per_forecast']} samples "
@@ -179,6 +180,14 @@ def headline_markdown(backtests: list[dict], bench: dict | None) -> str:
             f"inventory cost **{_signed(None if s.get('cost_saving_pct') is None else -s['cost_saving_pct'])}**.",
             "",
         ]
+        nw = bt["segments"].get("noted_weeks")
+        if nw:
+            lines += [
+                f"In the weeks where the planner left a note: forecast value add **{_signed(nw.get('fva_pinball_pct'))}**, "
+                f"vs the uplift rule **{_signed(nw.get('fva_vs_rule_pct'))}**, inventory cost "
+                f"**{_signed(None if nw.get('cost_saving_pct') is None else -nw['cost_saving_pct'])}**.",
+                "",
+            ]
     if bench and bench.get("levels"):
         best = max(bench["levels"], key=lambda r: r["forecasts_per_min"])
         gpu = "the serving GPU"
