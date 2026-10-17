@@ -342,7 +342,9 @@ async function runForecast() {
     });
     renderResult(r);
   } catch (e) {
-    $("result").replaceChildren(el("div", { class: "banner warn", text: `Request failed: ${e.message}` }));
+    const client = /^4\d\d /.test(e.message);
+    $("result").replaceChildren(el("div", { class: "banner" + (client ? "" : " warn"),
+      text: client ? e.message.replace(/^4\d\d /, "") : `Request failed: ${e.message}` }));
   } finally {
     btn.disabled = false; btn.textContent = "Forecast and decide";
   }
@@ -385,6 +387,18 @@ function renderBacktest(k) {
   const t4 = tile("LLM judgment vs rule", `${signed(s.fva_vs_rule_pct ?? 0)}%`, "vs a classical uplift rule on the same evidence");
   t4.querySelector(".v").classList.add(good(s.fva_vs_rule_pct ?? 0));
   const t5 = tile("90% interval coverage", pct(s.agent_cal.coverage_90), "target 90%");
+  // The decision layer alone: ordering the cost-optimal quantile instead of the point forecast, no LLM.
+  const t0 = s.newsvendor_saving_pct == null ? null : tile("Ordering the right quantile",
+    `${signed(-s.newsvendor_saving_pct)}%`, "inventory cost vs ordering the point forecast (no LLM involved)", "accent");
+  if (t0) t0.querySelector(".v").classList.add(good(s.newsvendor_saving_pct));
+  // Weeks where a planner left a free-text note: only the model can read it.
+  const nw = bt.segments.noted_weeks;
+  const noted = nw ? [
+    tile("Weeks with a note: accuracy", `${signed(nw.fva_pinball_pct)}%`, "pinball loss vs the baseline; the note names no number", "accent"),
+    tile("Weeks with a note: vs rule", `${signed(nw.fva_vs_rule_pct)}%`, "vs the uplift rule, which cannot read the note"),
+    tile("Weeks with a note: cost", `${signed(-nw.cost_saving_pct)}%`, "leftovers + lost margin vs the baseline"),
+  ] : [];
+  noted.forEach((t, i) => t.querySelector(".v").classList.add(good(i === 2 ? nw.cost_saving_pct : i === 1 ? nw.fva_vs_rule_pct : nw.fva_pinball_pct)));
   const intro = el("p", { class: "meta", style: "margin-top:0",
     text: `${fmt(m.n_forecasts)} one-week-ahead forecasts (${m.n_series} SKUs, ${m.weeks[0]} to ${m.weeks[1]}), `
       + `${m.source === "synthetic" ? "synthetic store" : "real M5 Walmart sales"}, model ${bt.llm.model}, `
@@ -399,11 +413,15 @@ function renderBacktest(k) {
     el("div", { class: "k", text: `actual ${fmt(c.actual)} · baseline ${fmt(c.baseline_median)} · ShelfCast ${fmt(c.agent_median)}` })));
   const tabs = BACKTESTS.length > 1 ? el("div", { class: "tabs", role: "tablist" }, ...BACKTESTS.map((b, i) =>
     el("button", { type: "button", role: "tab", "aria-selected": String(i === k), class: i === k ? "on" : "",
-      text: b.meta.source === "synthetic" ? "Synthetic store" : `M5 Walmart (${b.meta.n_series} SKUs, real sales)`,
+      text: b.meta.source !== "synthetic" ? `M5 Walmart (${b.meta.n_series} SKUs, real sales)`
+        : b.segments.noted_weeks ? "Planner notes (synthetic store)" : "Synthetic store",
       onclick: () => renderBacktest(i) }))) : null;
-  $("backtest").replaceChildren(...[tabs, intro].filter(Boolean), el("div", { class: "tiles" }, t1, t2, t3, t4, t5), methodsTable(s),
+  const note = nw ? el("p", { class: "meta", text: "In some weeks a planner left a free-text note with no number in it "
+    + "(for example \"supplier warns this week's delivery will be short\"). The baseline and the rule cannot read it; the model can." }) : null;
+  $("backtest").replaceChildren(...[tabs, intro, note,
+    el("div", { class: "tiles" }, ...noted, ...[t0, t1, t2, t3, t4, t5].filter(Boolean)), methodsTable(s),
     cases.length ? el("h2", { style: "margin-top:18px", text: "Biggest wins (click to replay)" }) : null,
-    cases.length ? el("div", { class: "cases" }, ...cases) : null);
+    cases.length ? el("div", { class: "cases" }, ...cases) : null].filter(Boolean));
 }
 
 function renderBench(b) {
@@ -423,7 +441,7 @@ function renderBench(b) {
       .map((h) => el("th", { text: h })))), el("tbody", {}, ...rows)));
   $("bench").replaceChildren(el("p", { class: "meta", style: "margin-top:0",
     text: `Model ${b.model} served by vLLM. Each forecast draws ${b.n_samples} samples in one request; the prompt is prefilled once.` }),
-    tiles, table, b.gpu_info ? el("details", {}, el("summary", { text: "GPU on the serving host" }), el("pre", { text: b.gpu_info })) : null);
+    tiles, table, ...(b.gpu_info ? [el("details", {}, el("summary", { text: "GPU on the serving host" }), el("pre", { text: b.gpu_info }))] : []));
 }
 
 async function init() {

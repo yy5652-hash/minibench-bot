@@ -73,16 +73,25 @@ SHIM = r"""<script>
     let suffix = "";
     if (note) {
       const i = NOTES.indexOf(note);
-      if (i < 0) return fail("this static demo has the example notes pre-run on the GPU; free-text notes need the live server (see the README)");
+      if (i < 0) return fail("Free-text notes run the model live, which needs the GPU server (see the README). This copy has the five example notes pre-run on the MI300X: click one of them above.");
       suffix = "_n" + i;
     }
     let res = await realFetch(`api/forecast/${b.sku_id}/${b.target_index}${suffix}.json`);
-    if (!res.ok && suffix) return fail("the example notes are pre-run for upcoming weeks only; pick a week after today");
+    if (!res.ok && suffix) return fail("The example notes are pre-run for the upcoming weeks only: pick a week without \"(actual known)\".");
     if (!res.ok) return fail("week not exported");
     return ok(decide(await res.json(), b.margin_pct, b.overage_pct));
   };
 })();
 </script>
+"""
+
+
+BANNER = """<div style="max-width:1280px;margin:14px auto 0;padding:0 24px">
+<div class="banner" style="margin:0">Static demo: every answer on this page was produced by Qwen3-30B-A3B on one
+AMD Instinct MI300X (vLLM on ROCm) and is replayed here; the order is recomputed in your browser for any margin and
+leftover cost you set. Try a product and week, then one of the example planner notes.
+<a href="https://github.com/yy5652-hash/shelfcast" style="color:var(--accent)">Code</a> ·
+<a href="shelfcast_demo.mp4" style="color:var(--accent)">2-minute video</a></div></div>
 """
 
 
@@ -153,7 +162,8 @@ def main() -> None:
     asyncio.run(export(app, out, notes, args.concurrency))
     html = (WEB_DIR / "index.html").read_text()
     shim = SHIM.replace("__NOTES__", json.dumps(notes))
-    (out / "index.html").write_text(html.replace("<script", shim + "<script", 1))
+    html = html.replace("<script", shim + "<script", 1).replace("<main>", BANNER + "<main>", 1)
+    (out / "index.html").write_text(html)
     (out / ".nojekyll").write_text("")
     print(f"wrote {out}/index.html")
 

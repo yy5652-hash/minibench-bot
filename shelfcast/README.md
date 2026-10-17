@@ -5,7 +5,22 @@
 AMD Developer Hackathon: ACT III · Track: **Reinvent Commerce** (demand and inventory planning)
 
 **Live demo:** https://yy5652-hash.github.io/shelfcast/ (every answer in it was produced by the model on
-one AMD Instinct MI300X; the page replays them and recomputes the order for any cost you set)
+one AMD Instinct MI300X; the page replays them and recomputes the order for any cost you set) ·
+**Video (2 min):** https://yy5652-hash.github.io/shelfcast/shelfcast_demo.mp4 · **Slides:** [`submission/deck.pdf`](submission/deck.pdf)
+
+[![The ShelfCast dashboard: Canned Pumpkin for Thanksgiving week. The baseline orders 21, ShelfCast orders 40 and names the driver.](submission/dashboard.png)](https://yy5652-hash.github.io/shelfcast/)
+
+**At a glance**, from the full run on one AMD Instinct MI300X (2,600 backtest forecasts, each made only from
+the past; details and the weak spots under [Results](#results)):
+
+* **Real Walmart sales (M5):** ordering the cost-optimal quantile instead of the point forecast cuts inventory
+  cost by **8.0%**, with 90% of outcomes inside the 90% range. On these anonymised items the model itself adds
+  nothing measurable, and we say so.
+* **Planner notes:** in weeks where a planner left a free-text note with no number in it, the forecast is
+  **19.4%** more accurate than the baseline and **17.6%** more than a no-LLM rule on the same evidence; inventory
+  cost is **21.9%** lower (synthetic store, labelled as such).
+* **One GPU:** **256 forecasts a minute** (5 samples each, 100% valid JSON) for **$0.19 per 1,000 forecasts**;
+  the whole run cost $1.49 of GPU time.
 
 ---
 
