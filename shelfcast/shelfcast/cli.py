@@ -112,7 +112,8 @@ def cmd_bench(args) -> None:
     ds = _dataset(args.dataset)
     llm = _llm(args, cache=False)
     levels = tuple(int(x) for x in args.concurrency.split(","))
-    res = asyncio.run(run_bench(llm, ds, levels, n_samples=args.samples, price_per_hour=args.price_per_hour))
+    res = asyncio.run(run_bench(llm, ds, levels, n_samples=args.samples, price_per_hour=args.price_per_hour,
+                                max_requests_per_level=args.max_requests))
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "bench.json").write_text(json.dumps(res, indent=2))
@@ -207,7 +208,9 @@ def main(argv: list[str] | None = None) -> None:
     sp = sub.add_parser("bench")
     common(sp)
     sp.add_argument("--concurrency", default="1,8,32,64,128")
-    sp.add_argument("--price-per-hour", type=float, default=1.99)
+    sp.add_argument("--price-per-hour", type=float, default=2.99, help="GPU price for the cost column")
+    sp.add_argument("--max-requests", type=int, default=256,
+                    help="requests per concurrency level (raise it to measure levels above 128)")
     sp.set_defaults(func=cmd_bench)
 
     sp = sub.add_parser("warm")

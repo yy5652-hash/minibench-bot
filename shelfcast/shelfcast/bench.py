@@ -43,7 +43,7 @@ async def run_bench(
     dataset: Dataset,
     concurrencies: tuple[int, ...] = (1, 8, 32, 64, 128),
     n_samples: int = 5,
-    price_per_hour: float = 1.99,
+    price_per_hour: float = 2.99,
     max_requests_per_level: int = 256,
     progress=print,
 ) -> dict:
@@ -53,7 +53,7 @@ async def run_bench(
 
     # A pool of distinct prompts, walking back through history so no two requests repeat.
     pool: list[list[dict]] = []
-    for back in range(0, 60):
+    for back in range(0, 200):
         for s in dataset.series:
             t = s.last_known_index() - back
             if t > 30:

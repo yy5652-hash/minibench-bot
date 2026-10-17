@@ -26,6 +26,9 @@ ARGS=(
   --max-num-seqs "${VLLM_MAX_NUM_SEQS:-512}"
   --enable-prefix-caching
 )
+# Extra vLLM flags, e.g. VLLM_EXTRA_ARGS="--quantization fp8" to fit a 72B model with room for KV cache.
+# shellcheck disable=SC2206  # split on spaces on purpose
+ARGS+=(${VLLM_EXTRA_ARGS:-})
 
 echo "Serving $MODEL on $HOST:$PORT (AITER=$VLLM_ROCM_USE_AITER)"
 if command -v vllm >/dev/null 2>&1; then

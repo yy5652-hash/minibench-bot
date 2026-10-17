@@ -224,7 +224,7 @@ python -m shelfcast data synthetic|m5     build a dataset (m5 downloads the Walm
 python -m shelfcast check                 ping the model endpoint
 python -m shelfcast forecast --sku BAK-001 [--week N] [--notes "..."] [--brief]
 python -m shelfcast backtest --dataset data/m5.json [--origins 26] [--offline]
-python -m shelfcast bench [--concurrency 1,8,32,64,128] [--price-per-hour 1.99]
+python -m shelfcast bench [--concurrency 1,8,32,64,128,256,512] [--max-requests 1024] [--price-per-hour 2.99]
 python -m shelfcast warm                  pre-run upcoming weeks for replay mode
 python -m shelfcast serve [--mode live|replay] [--port 8080]
 ```
