@@ -23,3 +23,11 @@ an edit saved without changes or a platform-side update (`last_comment_at` is 20
 two visible comments, which suggests a comment was removed around then). No action needed.
 
 `live_metadata_2026-10-15.json` holds the API fields used for this check.
+
+## Post-deadline update published on 18 Oct 2026 (13:45 UTC, 14:45 UK)
+
+Approved by the user before publishing. The live body is now `DEV_POST_body_live.md`: the judged text unchanged, plus
+a note under the first line, one sentence on the leaderboard bullet, and an "Update" section at the end with 13
+models run on 15 and 18 Oct on the same task version 3. Title, cover and tags unchanged. The Kaggle leaderboard was
+deliberately left at its 21 pre-deadline models: Kaggle has retired three of them from the model picker, and saving
+the picker could have dropped their rows.
