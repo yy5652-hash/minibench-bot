@@ -5,7 +5,8 @@ on:
   schedule:
     - cron: "7,27,47 * * * *" # every 20 min, offset off the hour. Make sure to skip already-forecasted questions!
 
-# Add concurrency group to prevent parallel runs
+# Add concurrency group to prevent parallel runs. With cancel-in-progress false, one run waits behind the running one and
+# starts as soon as it ends.
 concurrency:
   group: metaculus-forecast-publisher
   cancel-in-progress: false
@@ -14,7 +15,7 @@ concurrency:
 # Daily job to run the simple forecast bot
 jobs:
   forecast_job:
-    timeout-minutes: 50
+    timeout-minutes: 358 # GitHub's limit for a job is 360
     runs-on: ubuntu-latest # determines the machine that will run the job - keep as is
     steps: # sets up the steps that will be run in order
       # setup repository with all necessary dependencies - keep as is
@@ -39,8 +40,18 @@ jobs:
       - name: Install dependencies
         run: poetry install --only main --no-interaction --no-root
       - name: Run bot
+        # GitHub starts scheduled runs late (asked for every 20 minutes, they came 2 to 5 hours apart in October), and a
+        # MiniBench question is open for only a few hours, so one run keeps looking for open questions every five minutes
+        # for almost six hours; the concurrency group then starts the next run at once. A pass with no open question
+        # makes no model call; already-forecast questions are skipped.
         run: |
-          poetry run python main.py --mode tournament --publish --predictions "${{ vars.PREDICTIONS_PER_QUESTION || '5' }}"
+          stop=$(( $(date +%s) + 340 * 60 ))
+          while :; do
+            poetry run python main.py --mode tournament --publish --predictions "${{ vars.PREDICTIONS_PER_QUESTION || '5' }}" \
+              || echo "This pass failed; the next one starts in five minutes."
+            if [ $(( $(date +%s) + 300 )) -ge "$stop" ]; then break; fi
+            sleep 300
+          done
         # this reads the environment variables from the github repository.
         # Store under Settings --> Secrets and variables --> Actions
         env:
