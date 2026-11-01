@@ -126,11 +126,13 @@ class GeminiLlm(GeneralLlm):
         return answer
 
     async def _post(self, body: dict) -> dict:
-        url = f"{API_ROOT}/{self._gemini_model}:generateContent"
         headers = {"x-goog-api-key": os.environ["GEMINI_API_KEY"].strip()}
         for attempt in range(1, 6):
             await PACER.wait()
             self.request_count += 1
+            # Forecasts run side by side: judge a 429 by the model this request used, not the current one.
+            used = self._gemini_model
+            url = f"{API_ROOT}/{used}:generateContent"
             try:
                 async with httpx.AsyncClient(timeout=240) as client:
                     response = await client.post(url, headers=headers, json=body)
@@ -150,10 +152,9 @@ class GeminiLlm(GeneralLlm):
                 if _is_daily_quota(error):
                     # A spent stronger model must not cost a question: step down, keep forecasting.
                     fallback = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite").removeprefix("gemini/")
-                    if fallback and fallback != self._gemini_model:
-                        print(f"Gemini daily quota spent on {self._gemini_model}; using {fallback}.")
+                    if fallback and fallback != used:
+                        print(f"Gemini daily quota spent on {used}; using {fallback}.")
                         self._gemini_model = fallback
-                        url = f"{API_ROOT}/{self._gemini_model}:generateContent"
                         continue
                     raise GeminiQuotaError(f"Gemini daily quota exhausted: {message}")
                 wait = _retry_seconds(error) or 20 * attempt
