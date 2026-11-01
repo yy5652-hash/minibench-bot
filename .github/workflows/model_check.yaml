@@ -1,0 +1,36 @@
+name: Check Gemini Model Access
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: List models and probe each one once
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        # Prints model names, HTTP status and quota ids only; the key stays in a header.
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+          root = "https://generativelanguage.googleapis.com/v1beta/models"
+          head = {"x-goog-api-key": os.environ["GEMINI_API_KEY"].strip(), "Content-Type": "application/json"}
+          data = json.load(urllib.request.urlopen(urllib.request.Request(root + "?pageSize=200", headers=head)))
+          names = [m["name"].split("/")[-1] for m in data["models"] if "generateContent" in m.get("supportedGenerationMethods", [])]
+          names = [n for n in names if n.startswith("gem") and not any(s in n for s in ("tts", "image", "audio", "live", "embedding", "robotics", "computer"))]
+          print("candidates:", names)
+          body = json.dumps({"contents": [{"role": "user", "parts": [{"text": "Reply with only the word READY."}]}]}).encode()
+          for n in names:
+              req = urllib.request.Request(f"{root}/{n}:generateContent", data=body, headers=head)
+              t = time.time()
+              try:
+                  r = json.load(urllib.request.urlopen(req, timeout=90))
+                  print(f"{n}: OK {time.time()-t:.1f}s thoughts={r.get('usageMetadata',{}).get('thoughtsTokenCount',0)}")
+              except urllib.error.HTTPError as e:
+                  err = json.loads(e.read() or b"{}").get("error", {})
+                  q = [v.get("quotaId") for d in err.get("details", []) for v in d.get("violations", [])]
+                  print(f"{n}: HTTP {e.code} {q[:3]}")
+              time.sleep(5)
+          PY
