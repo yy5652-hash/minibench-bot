@@ -41,9 +41,23 @@ from forecasting_tools import (
 )
 
 from bot_runtime import run, safe_model_names
+from prompts import binary_prompt, date_prompt, multiple_choice_prompt, numeric_prompt, research_prompt
+from research_pipeline import gather_research
 
 dotenv.load_dotenv()
 logger = logging.getLogger(__name__)
+
+
+def _today() -> str:
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def _keep_every_option_alive(option_list: PredictedOptionList, floor: float = 0.01) -> None:
+    """A 0% option that resolves is the worst possible log score."""
+    options = option_list.predicted_options
+    raised = [max(o.probability, floor) for o in options]
+    for option, value in zip(options, raised):
+        option.probability = value / sum(raised)
 
 
 class SummerTemplateBot2026(ForecastBot):
@@ -139,34 +153,10 @@ class SummerTemplateBot2026(ForecastBot):
         async with self._concurrency_limiter:
             research = ""
             researcher = self.get_llm("researcher")
-
-            prompt = clean_indents(
-                f"""
-                You are an assistant to a superforecaster.
-                Today's date is {datetime.now(timezone.utc).date().isoformat()} (UTC).
-                The superforecaster will give you a question they intend to forecast on.
-                Give a concise, dated rundown of evidence relevant to the exact resolution criteria.
-                Prefer the named resolution source and other primary sources. Include URLs and
-                publication dates for facts you verify. Distinguish an event that has already
-                happened from an announcement or plan. If you cannot verify a claim with a
-                source, label it unverified instead of inventing a citation or current value.
-                Identify the current observed value, a relevant historical base rate, and
-                the main ways the result could differ from the apparent trend when available.
-                Do not use the Metaculus community forecast as evidence for the outcome.
-                You do not produce forecasts yourself.
-
-                Question:
-                {question.question_text}
-
-                This question's outcome will be determined by the specific criteria below:
-                {question.resolution_criteria}
-
-                {question.fine_print}
-                """
-            )
+            prompt = research_prompt(question, _today())
 
             if isinstance(researcher, GeneralLlm):
-                research = await researcher.invoke(prompt)
+                research = await gather_research(question, researcher)
             elif (
                 researcher == "asknews/news-summaries"
                 or researcher == "asknews/deep-research/low-depth"
@@ -198,44 +188,8 @@ class SummerTemplateBot2026(ForecastBot):
     async def _run_forecast_on_binary(
         self, question: BinaryQuestion, research: str
     ) -> ReasonedPrediction[float]:
-        prompt = clean_indents(
-            f"""
-            You are a professional forecaster interviewing for a job.
-
-            Your interview question is:
-            {question.question_text}
-
-            Question background:
-            {question.background_info}
-
-
-            This question's outcome will be determined by the specific criteria below:
-            {question.resolution_criteria}
-
-            {question.fine_print}
-
-
-            Your research assistant says:
-            {research}
-
-            Check the cited evidence against the resolution criteria. Treat unsupported
-            research claims as uncertain. Use a relevant base rate, the current observed
-            state, and the remaining time; do not merely repeat the community forecast.
-
-            Today is {datetime.now().strftime("%Y-%m-%d")}.
-
-            Before answering you write:
-            (a) The time left until the outcome to the question is known.
-            (b) The status quo outcome if nothing changed.
-            (c) A brief description of a scenario that results in a No outcome.
-            (d) A brief description of a scenario that results in a Yes outcome.
-
-            You write your rationale remembering that good forecasters put extra weight on the status quo outcome since the world changes slowly most of the time.
-            {self._get_conditional_disclaimer_if_necessary(question)}
-
-            The last thing you write is your final answer as: "Probability: ZZ%", 0-100
-            """
-        )
+        prompt = binary_prompt(question, research, _today(),
+                               self._get_conditional_disclaimer_if_necessary(question))
 
         return await self._binary_prompt_to_forecast(question, prompt)
 
@@ -252,7 +206,7 @@ class SummerTemplateBot2026(ForecastBot):
             model=self.get_llm("parser", "llm"),
             num_validation_samples=self._structure_output_validation_samples,
         )
-        decimal_pred = max(0.01, min(0.99, binary_prediction.prediction_in_decimal))
+        decimal_pred = max(0.02, min(0.98, binary_prediction.prediction_in_decimal))
 
         logger.info(
             f"Forecasted URL {question.page_url} with prediction: {decimal_pred}."
@@ -264,48 +218,8 @@ class SummerTemplateBot2026(ForecastBot):
     async def _run_forecast_on_multiple_choice(
         self, question: MultipleChoiceQuestion, research: str
     ) -> ReasonedPrediction[PredictedOptionList]:
-        prompt = clean_indents(
-            f"""
-            You are a professional forecaster interviewing for a job.
-
-            Your interview question is:
-            {question.question_text}
-
-            The options are: {question.options}
-
-
-            Background:
-            {question.background_info}
-
-            {question.resolution_criteria}
-
-            {question.fine_print}
-
-
-            Your research assistant says:
-            {research}
-
-            Check the cited evidence against the resolution criteria. Treat unsupported
-            research claims as uncertain. Use a relevant base rate, the current observed
-            state, and the remaining time; do not merely repeat the community forecast.
-
-            Today is {datetime.now().strftime("%Y-%m-%d")}.
-
-            Before answering you write:
-            (a) The time left until the outcome to the question is known.
-            (b) The status quo outcome if nothing changed.
-            (c) A description of an scenario that results in an unexpected outcome.
-
-            {self._get_conditional_disclaimer_if_necessary(question)}
-            You write your rationale remembering that (1) good forecasters put extra weight on the status quo outcome since the world changes slowly most of the time, and (2) good forecasters leave some moderate probability on most options to account for unexpected outcomes.
-
-            The last thing you write is your final probabilities for the N options in this order {question.options} as:
-            Option_A: Probability_A
-            Option_B: Probability_B
-            ...
-            Option_N: Probability_N
-            """
-        )
+        prompt = multiple_choice_prompt(question, research, _today(),
+                                        self._get_conditional_disclaimer_if_necessary(question))
         return await self._multiple_choice_prompt_to_forecast(question, prompt)
 
     async def _multiple_choice_prompt_to_forecast(
@@ -332,6 +246,7 @@ class SummerTemplateBot2026(ForecastBot):
             additional_instructions=parsing_instructions,
         )
 
+        _keep_every_option_alive(predicted_option_list)
         logger.info(
             f"Forecasted URL {question.page_url} with prediction: {predicted_option_list}."
         )
@@ -347,61 +262,8 @@ class SummerTemplateBot2026(ForecastBot):
         upper_bound_message, lower_bound_message = (
             self._create_upper_and_lower_bound_messages(question)
         )
-        prompt = clean_indents(
-            f"""
-            You are a professional forecaster interviewing for a job.
-
-            Your interview question is:
-            {question.question_text}
-
-            Background:
-            {question.background_info}
-
-            {question.resolution_criteria}
-
-            {question.fine_print}
-
-            Units for answer: {question.unit_of_measure if question.unit_of_measure else "Not stated (please infer this)"}
-
-            Your research assistant says:
-            {research}
-
-            Check the cited evidence against the resolution criteria and units. Treat
-            unsupported research claims as uncertain. Anchor the distribution to a
-            relevant base rate and current observation, then allow for both tails.
-
-            Today is {datetime.now().strftime("%Y-%m-%d")}.
-
-            {lower_bound_message}
-            {upper_bound_message}
-
-            Formatting Instructions:
-            - Please notice the units requested and give your answer in these units (e.g. whether you represent a number as 1,000,000 or 1 million).
-            - Never use scientific notation.
-            - Always start with a smaller number (more negative if negative) and then increase from there. The value for percentile 10 should always be less than the value for percentile 20, and so on.
-
-            Before answering you write:
-            (a) The time left until the outcome to the question is known.
-            (b) The outcome if nothing changed.
-            (c) The outcome if the current trend continued.
-            (d) The expectations of experts and markets.
-            (e) A brief description of an unexpected scenario that results in a low outcome.
-            (f) A brief description of an unexpected scenario that results in a high outcome.
-
-            {self._get_conditional_disclaimer_if_necessary(question)}
-            You remind yourself that good forecasters are humble and set wide 90/10 confidence intervals to account for unknown unknowns.
-
-            The last thing you write is your final answer as:
-            "
-            Percentile 10: XX (lowest number value)
-            Percentile 20: XX
-            Percentile 40: XX
-            Percentile 60: XX
-            Percentile 80: XX
-            Percentile 90: XX (highest number value)
-            "
-            """
-        )
+        prompt = numeric_prompt(question, research, _today(), lower_bound_message, upper_bound_message,
+                                self._get_conditional_disclaimer_if_necessary(question))
         return await self._numeric_prompt_to_forecast(question, prompt)
 
     async def _numeric_prompt_to_forecast(
@@ -445,60 +307,8 @@ class SummerTemplateBot2026(ForecastBot):
         upper_bound_message, lower_bound_message = (
             self._create_upper_and_lower_bound_messages(question)
         )
-        prompt = clean_indents(
-            f"""
-            You are a professional forecaster interviewing for a job.
-
-            Your interview question is:
-            {question.question_text}
-
-            Background:
-            {question.background_info}
-
-            {question.resolution_criteria}
-
-            {question.fine_print}
-
-            Your research assistant says:
-            {research}
-
-            Check the cited evidence against the resolution criteria and date bounds.
-            Treat unsupported research claims as uncertain. Anchor the distribution to
-            relevant past timelines and the current observed stage of progress.
-
-            Today is {datetime.now().strftime("%Y-%m-%d")}.
-
-            {lower_bound_message}
-            {upper_bound_message}
-
-            Formatting Instructions:
-            - This is a date question, and as such, the answer must be expressed in terms of dates.
-            - The dates must be written in the format of YYYY-MM-DD. If hours matter, please append the date with the hour in UTC and military time: YYYY-MM-DDTHH:MM:SSZ.No other formatting is allowed.
-            - Always start with a lower date chronologically and then increase from there.
-            - Do NOT forget this. The dates must be written in chronological order starting at the earliest time at percentile 10 and increasing from there.
-
-            Before answering you write:
-            (a) The time left until the outcome to the question is known.
-            (b) The outcome if nothing changed.
-            (c) The outcome if the current trend continued.
-            (d) The expectations of experts and markets.
-            (e) A brief description of an unexpected scenario that results in a low outcome.
-            (f) A brief description of an unexpected scenario that results in a high outcome.
-
-            {self._get_conditional_disclaimer_if_necessary(question)}
-            You remind yourself that good forecasters are humble and set wide 90/10 confidence intervals to account for unknown unknowns.
-
-            The last thing you write is your final answer as:
-            "
-            Percentile 10: YYYY-MM-DD (oldest date)
-            Percentile 20: YYYY-MM-DD
-            Percentile 40: YYYY-MM-DD
-            Percentile 60: YYYY-MM-DD
-            Percentile 80: YYYY-MM-DD
-            Percentile 90: YYYY-MM-DD (newest date)
-            "
-            """
-        )
+        prompt = date_prompt(question, research, _today(), lower_bound_message, upper_bound_message,
+                             self._get_conditional_disclaimer_if_necessary(question))
         forecast = await self._date_prompt_to_forecast(question, prompt)
         return forecast
 

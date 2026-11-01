@@ -175,14 +175,20 @@ class GeminiLlm(GeneralLlm):
         queries = plan["queries"] or [prompt.split("Question:")[-1].strip().splitlines()[0][:120]]
         urls = list(dict.fromkeys(named_urls + plan["urls"]))[:5]
         headlines = []
+        articles = []
         seen = set()
         for query in queries[:3]:
-            for item in await google_news(query):
+            for item in await google_news(query) + await bing_news(query):
                 if item["link"] not in seen:
                     seen.add(item["link"])
                     headlines.append(item)
+                    if item.get("direct"):
+                        articles.append(item)
         headlines.sort(key=lambda h: h["date"], reverse=True)
         headlines = headlines[:25]
+        # Bing links lead straight to the article, so the URL tool can read the full text.
+        articles.sort(key=lambda h: h["date"], reverse=True)
+        urls = list(dict.fromkeys(urls + [a["link"] for a in articles[:6]]))[:10]
         if not headlines and not urls:
             raise RuntimeError("Research found no current sources; refusing a memory-only forecast.")
         news_block = "\n".join(
@@ -227,6 +233,29 @@ class GeminiLlm(GeneralLlm):
 
     def to_dict(self) -> dict:
         return {"model": self.model, "provider": "gemini-direct", "research": self._search}
+
+
+async def bing_news(query: str, limit: int = 8) -> list[dict]:
+    """Dated articles with direct links; no key needed. Failures yield nothing."""
+    url = "https://www.bing.com/news/search?format=rss&q=" + urllib.parse.quote(query)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            response = await client.get(url, headers={"User-Agent": "Mozilla/5.0 forecasting-bot"})
+        root = ET.fromstring(response.text)
+    except (httpx.HTTPError, ET.ParseError):
+        return []
+    items = []
+    for item in root.findall(".//item")[:limit]:
+        link = item.findtext("link", "").strip()
+        direct = urllib.parse.parse_qs(urllib.parse.urlsplit(link).query).get("url", [link])[0]
+        try:
+            date = parsedate_to_datetime(item.findtext("pubDate", "")).date().isoformat()
+        except (TypeError, ValueError):
+            date = "undated"
+        host = urllib.parse.urlsplit(direct).netloc.removeprefix("www.")
+        items.append({"date": date, "title": item.findtext("title", "").strip(), "source": host,
+                      "link": direct, "direct": True})
+    return items
 
 
 async def google_news(query: str, limit: int = 10) -> list[dict]:

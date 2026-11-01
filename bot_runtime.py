@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from forecasting_tools import ApiFilter, ForecastReport, GeneralLlm, MetaculusClient
 
 from bot_helpers import _is_real_env, print_run_summary_banner
+from cli_llm import CliLlm, RotatingLlm
 from gemini_llm import PACER, GeminiLlm
 from local_responses import LocalResponsesLlm
+from research_pipeline import ResearchTeam
 
 
 def model_config() -> dict:
@@ -25,11 +27,13 @@ def model_config() -> dict:
         )
     if researcher.lower() in {"none", "no_research"}:
         raise ValueError("A current-evidence research provider is required.")
-    parser = os.getenv("PARSER_MODEL", "").strip() or forecast
+    parser = os.getenv("PARSER_MODEL", "").strip() or forecast.split(",")[0].strip()
 
     local_base = os.getenv("LOCAL_MODEL_BASE_URL", "").strip()
 
     def llm(name: str, *, search: bool = False) -> GeneralLlm:
+        if name.startswith(("codex/", "claude/")):
+            return CliLlm(name, search=search)
         if local_base:
             return LocalResponsesLlm(name, local_base, search=search)
         if name.startswith("gemini/"):
@@ -37,7 +41,15 @@ def model_config() -> dict:
         # Do not send temperature to reasoning/search models that reject it.
         return GeneralLlm(model=name, timeout=180, allowed_tries=2)
 
-    research = researcher if researcher.startswith(("asknews/", "smart-searcher/")) else llm(researcher, search=True)
+    # A comma-separated list means several models: forecasts rotate, researchers run side by side.
+    forecasters = [llm(name.strip()) for name in forecast.split(",")]
+    research_names = [name.strip() for name in researcher.split(",")]
+    if researcher.startswith(("asknews/", "smart-searcher/")):
+        research = researcher
+    elif len(research_names) > 1:
+        research = ResearchTeam([llm(name, search=True) for name in research_names])
+    else:
+        research = llm(research_names[0], search=True)
     if researcher.startswith("asknews/") and not (
         _is_real_env("ASKNEWS_API_KEY")
         or (_is_real_env("ASKNEWS_CLIENT_ID") and _is_real_env("ASKNEWS_SECRET"))
@@ -45,7 +57,8 @@ def model_config() -> dict:
         raise ValueError("The selected AskNews researcher has no configured credentials.")
     if researcher.startswith("smart-searcher/") and not _is_real_env("EXA_API_KEY"):
         raise ValueError("The selected SmartSearcher needs EXA_API_KEY.")
-    return {"default": llm(forecast), "researcher": research,
+    return {"default": forecasters[0] if len(forecasters) == 1 else RotatingLlm(forecasters),
+            "researcher": research,
             "parser": llm(parser), "summarizer": llm(parser)}
 
 
@@ -67,6 +80,21 @@ async def preflight(bot) -> None:
             if not reply.strip():
                 raise RuntimeError(f"Empty model response for {role}")
             checked.add(model.model)
+
+
+def split_between_runners(questions: list, now: datetime) -> list:
+    """Each question gets one forecast, so two runners must never want the same one.
+
+    The local runner keeps questions with more than ONLY_CLOSING_AFTER_MINUTES left. The hosted
+    runner is the backup and takes what is still unforecast within ONLY_CLOSING_WITHIN_MINUTES.
+    """
+    within = int(os.getenv("ONLY_CLOSING_WITHIN_MINUTES", "0"))
+    after = int(os.getenv("ONLY_CLOSING_AFTER_MINUTES", "0"))
+    if within:
+        questions = [q for q in questions if q.close_time and q.close_time - now <= timedelta(minutes=within)]
+    if after:
+        questions = [q for q in questions if not q.close_time or q.close_time - now > timedelta(minutes=after)]
+    return questions
 
 
 async def run(bot_class, args) -> int:
@@ -112,6 +140,8 @@ async def run(bot_class, args) -> int:
     print(f"Open questions: {len(questions)}; unpredicted: {len(pending)}")
     for q in pending:
         print(f"  {q.close_time} | {q.page_url} | {q.question_text}")
+    pending = split_between_runners(pending, datetime.now(timezone.utc))
+    print(f"Taken by this runner: {len(pending)}")
     if args.inventory_only or not pending:
         return 0
     if args.limit:
@@ -146,8 +176,7 @@ async def run(bot_class, args) -> int:
                 print("Provider access/credit failure: stopping this batch.")
                 break
     print_run_summary_banner(reports, args.publish)
-    usage = {role: llm.usage_summary() for role, llm in bot._llms.items()
-             if isinstance(llm, (LocalResponsesLlm, GeminiLlm))}
+    usage = {role: llm.usage_summary() for role, llm in bot._llms.items() if hasattr(llm, "usage_summary")}
     if any(isinstance(llm, GeminiLlm) for llm in bot._llms.values()):
         usage["gemini_requests_this_run"] = PACER.requests
         print(f"Gemini requests this run: {PACER.requests}")

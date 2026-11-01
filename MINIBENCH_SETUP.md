@@ -25,10 +25,11 @@ https://github.com/Metaculus/metac-bot-template#readme
 
 ### Free Gemini tier (current default)
 
-Metaculus declined this season's credit grant, so the workflows default to
-`gemini/gemini-3.5-flash-lite` for all three roles, using the `GEMINI_API_KEY`
-secret (free tier: 15 requests/min, 500/day per Google project). Repository
-variables `FORECAST_MODEL`, `RESEARCH_MODEL`, `PARSER_MODEL` override it.
+Metaculus declined this season's credit grant, so the workflows use free Gemini
+models through the `GEMINI_API_KEY` secret: `gemini/gemini-3.6-flash` to research and
+forecast, `gemini/gemini-3.5-flash-lite` to parse. When a model's daily quota is spent,
+calls step down to `GEMINI_FALLBACK_MODEL`. Repository variables `FORECAST_MODEL`,
+`RESEARCH_MODEL` (each may be a comma-separated list) and `PARSER_MODEL` override this.
 
 `gemini_llm.py` calls the Gemini REST API directly, with the key in a header
 (LiteLLM puts it in failed-request URLs). All Gemini calls in a run share one
@@ -41,6 +42,32 @@ returns 429), so research uses Google News RSS headlines plus Gemini's
 neither yields a source. Each question costs about 2 research requests plus
 3 per prediction (forecast + 2 parser checks): 17 at the default 5 predictions.
 Set the variable `PREDICTIONS_PER_QUESTION` lower to stretch the daily quota.
+
+### Two runners, one forecast per question
+
+The rules ask for one forecast per question, and only the last forecast before close is
+scored, so the two runners split the window and never want the same question:
+
+- **Local runner (first choice).** `scripts/run_local.sh`, started every five minutes by the
+  launchd agent `scripts/com.hudson.futureeval-bot.plist`. It takes questions with more than
+  80 minutes left. Research: Claude and Codex web search side by side, a follow-up search on
+  gaps and conflicts, and a keyless Polymarket and Manifold lookup. Forecasts rotate through
+  four models and the median is posted. The bot token is read from the macOS keychain item
+  `metaculus-bot-token` (account `SoundlyLunarBot`) and is never written to a file.
+- **Hosted backup.** The GitHub workflow, on free Gemini models. Set the repository variable
+  `ONLY_CLOSING_WITHIN_MINUTES=75` once the local runner is on, then restart the workflow;
+  with no value it takes every open question at once.
+
+To install the local runner:
+
+```sh
+security add-generic-password -U -s metaculus-bot-token -a SoundlyLunarBot -w
+cp scripts/com.hudson.futureeval-bot.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.hudson.futureeval-bot.plist
+```
+
+`scripts/replay.py` and `scripts/dry_run.py` test changes on closed questions and post nothing.
+Do not test on open tournament questions: that counts as a human in the loop under the rules.
 
 ### Existing local model service
 

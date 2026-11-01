@@ -10,7 +10,7 @@ from openai import AsyncOpenAI
 class LocalResponsesLlm(GeneralLlm):
     """Keep the SDK's output validation, bypass its incompatible LiteLLM transport."""
 
-    def __init__(self, model: str, base_url: str, *, search: bool = False):
+    def __init__(self, model: str, base_url: str, *, search: bool = False, effort: str | None = "high"):
         parsed = urlsplit(base_url)
         if (parsed.scheme not in {"http", "https"}
                 or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
@@ -21,9 +21,10 @@ class LocalResponsesLlm(GeneralLlm):
         super().__init__(model=model, responses_api=True, allowed_tries=1)
         self._response_model = model.removeprefix("openai/")
         self._search = search
+        self._effort = effort
         self._client = AsyncOpenAI(
             base_url=base_url.rstrip("/"), api_key="local-proxy",
-            timeout=240, max_retries=1,
+            timeout=600, max_retries=1,
         )
         self.request_count = 0
         self.search_calls = 0
@@ -35,9 +36,10 @@ class LocalResponsesLlm(GeneralLlm):
         kwargs = {}
         if self._search:
             kwargs = {"tools": [{"type": "web_search"}], "tool_choice": "required"}
+        if self._effort and not self._response_model.startswith("deepseek/"):
+            kwargs["reasoning"] = {"effort": self._effort}
         response = await self._client.responses.create(
-            model=self._response_model, input=messages, store=False,
-            reasoning={"effort": "medium"}, **kwargs,
+            model=self._response_model, input=messages, store=False, **kwargs,
         )
         if response.status != "completed":
             raise RuntimeError(f"Local model response was {response.status}, not completed.")
