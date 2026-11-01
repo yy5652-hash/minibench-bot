@@ -148,6 +148,13 @@ class GeminiLlm(GeneralLlm):
             message = _redact(str(error.get("message", ""))[:300])
             if response.status_code == 429:
                 if _is_daily_quota(error):
+                    # A spent stronger model must not cost a question: step down, keep forecasting.
+                    fallback = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite").removeprefix("gemini/")
+                    if fallback and fallback != self._gemini_model:
+                        print(f"Gemini daily quota spent on {self._gemini_model}; using {fallback}.")
+                        self._gemini_model = fallback
+                        url = f"{API_ROOT}/{self._gemini_model}:generateContent"
+                        continue
                     raise GeminiQuotaError(f"Gemini daily quota exhausted: {message}")
                 wait = _retry_seconds(error) or 20 * attempt
                 print(f"Gemini 429 (rate limit); waiting {wait:.0f}s before retry {attempt}.")

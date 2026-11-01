@@ -174,3 +174,4 @@ cython_debug/
 
 # Forecasts and diagnostic artifacts stay out of the public repository.
 forecast-output/
+.data/
