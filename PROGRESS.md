@@ -6,6 +6,7 @@
 - Local runner (first choice): `scripts/run_local.sh`, launchd every five minutes, takes questions with more than 110 minutes left. The repository lives in `~/futureeval-bot` because launchd jobs cannot read `~/Documents` (exit code 127); the old path is a symlink. Token in the keychain.
 - Hosted backup: GitHub Actions on free Gemini models, repository variable `ONLY_CLOSING_WITHIN_MINUTES=75`.
 - Checked 11-02: one bot-testing-area question previewed with all models and no posting; a one-shot launchd job reached the keychain, gpt-6.1-sol, Sonnet, Opus and DeepSeek.
+- First live question on the local runner, 11-02 03:40 UTC: post 46376, 77%, one forecast and one private comment, all three forecasting models present; the hosted backup left it alone.
 
 ## Next
 - Re-score once more questions resolve: compare per-model results from the private comments.
