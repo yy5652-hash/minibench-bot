@@ -50,7 +50,7 @@ scored, so the two runners split the window and never want the same question:
 
 - **Local runner (first choice).** `scripts/run_local.sh`, started every five minutes by the
   launchd agent `scripts/com.hudson.futureeval-bot.plist`. It takes questions with more than
-  80 minutes left. Research: Claude and Codex web search side by side, a follow-up search on
+  110 minutes left, which leaves a pass half an hour before the backup's window opens. Research: Claude and Codex web search side by side, a follow-up search on
   gaps and conflicts, and a keyless Polymarket and Manifold lookup. Five forecasts (three
   gpt-6.1-sol, one Claude Opus, one Claude Sonnet); the median is posted. The bot token is read from the macOS keychain item
   `metaculus-bot-token` (account `SoundlyLunarBot`) and is never written to a file.
@@ -58,7 +58,8 @@ scored, so the two runners split the window and never want the same question:
   `ONLY_CLOSING_WITHIN_MINUTES=75` once the local runner is on, then restart the workflow;
   with no value it takes every open question at once.
 
-To install the local runner:
+To install the local runner, keep the repository in `~/futureeval-bot` (macOS does not let launchd
+jobs read `~/Documents`; the job exits with code 127 there):
 
 ```sh
 security add-generic-password -U -s metaculus-bot-token -a SoundlyLunarBot -w

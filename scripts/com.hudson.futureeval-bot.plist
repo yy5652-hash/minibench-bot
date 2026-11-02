@@ -7,7 +7,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/zsh</string>
-    <string>/Users/hudsonyu/Documents/Codex/claude-local-projects/futureeval-bot/scripts/run_local.sh</string>
+    <string>/Users/hudsonyu/futureeval-bot/scripts/run_local.sh</string>
   </array>
   <key>StartInterval</key>
   <integer>300</integer>
@@ -16,8 +16,8 @@
   <key>ProcessType</key>
   <string>Interactive</string>
   <key>StandardOutPath</key>
-  <string>/Users/hudsonyu/Documents/Codex/claude-local-projects/futureeval-bot/.data/local-runner.log</string>
+  <string>/Users/hudsonyu/futureeval-bot/.data/local-runner.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/hudsonyu/Documents/Codex/claude-local-projects/futureeval-bot/.data/local-runner.log</string>
+  <string>/Users/hudsonyu/futureeval-bot/.data/local-runner.log</string>
 </dict>
 </plist>

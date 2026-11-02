@@ -21,8 +21,9 @@ export RESEARCH_MODEL="${RESEARCH_MODEL:-claude/claude-sonnet-5-5,codex/gpt-6.1-
 # On 20 resolved questions three gpt-6.1-sol votes with Opus and Sonnet beat equal weights (+2.2 vs -8.3 against the crowd).
 export FORECAST_MODEL="${FORECAST_MODEL:-codex/gpt-6.1-sol,claude-cli/claude-opus-5-5,codex/gpt-6.1-sol,claude-cli/claude-sonnet-5-5,codex/gpt-6.1-sol}"
 export PARSER_MODEL="${PARSER_MODEL:-deepseek/deepseek-flash}"
-# The hosted backup takes questions closing within 75 minutes, so stop just before that.
-export ONLY_CLOSING_AFTER_MINUTES=80
+# The hosted backup takes questions closing within 75 minutes. A pass can run half an hour,
+# so stop well before that or both runners could post on one question.
+export ONLY_CLOSING_AFTER_MINUTES=110
 
 exec .venv/bin/python main.py --mode tournament --publish --predictions "${PREDICTIONS_PER_QUESTION:-5}" \
   --output-dir .data/local-forecasts

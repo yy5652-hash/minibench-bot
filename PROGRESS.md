@@ -1,13 +1,13 @@
 # FutureEval bot progress
 
-## Current state (2026-11-01)
+## Current state (2026-11-02)
 - Bot account: SoundlyLunarBot (309116). Tournaments: Fall 2026 FutureEval (ends 2027-01-06) and MiniBench.
 - Rules that shape the design: one forecast per question; only the last forecast before close is scored; a missed question scores 0; no testing on open tournament questions.
-- Hosted runner (GitHub Actions) is live on the new pipeline with free Gemini models, stepping down to flash-lite when a daily quota is spent.
-- Local runner (`scripts/run_local.sh`, launchd) is written and tested on closed questions. It waits for the bot token in the macOS keychain.
+- Local runner (first choice): `scripts/run_local.sh`, launchd every five minutes, takes questions with more than 110 minutes left. The repository lives in `~/futureeval-bot` because launchd jobs cannot read `~/Documents` (exit code 127); the old path is a symlink. Token in the keychain.
+- Hosted backup: GitHub Actions on free Gemini models, repository variable `ONLY_CLOSING_WITHIN_MINUTES=75`.
+- Checked 11-02: one bot-testing-area question previewed with all models and no posting; a one-shot launchd job reached the keychain, gpt-6.1-sol, Sonnet, Opus and DeepSeek.
 
 ## Next
-- When the token is stored: check it, set `ONLY_CLOSING_WITHIN_MINUTES=75`, restart the hosted workflow, load the launchd agent.
 - Re-score once more questions resolve: compare per-model results from the private comments.
 - Optional: AskNews free tier (needs an email from the owner), PCHIP numeric smoothing, Platt scaling after a few hundred resolved forecasts.
 
